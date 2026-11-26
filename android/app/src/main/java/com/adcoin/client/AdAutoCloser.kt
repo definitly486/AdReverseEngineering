@@ -5,27 +5,31 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 
 /**
- * Starts looking for the close control only after MAX confirms the reward.
- * It never sends BACK and never finishes a third-party Activity.
+ * Watches the ad from the moment it is displayed. It only clicks a control
+ * that looks like a close button; it never sends BACK or finishes the ad Activity.
  */
 class AdAutoCloser(
     private val app: Application,
     private val onLog: (String) -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
-    private var adActivity: Activity? = null
+    @Volatile private var adActivity: Activity? = null
     private var tick: Runnable? = null
-    private var clickedInActivity = false
+    private var lastViewClickAt = 0L
 
     private val prefs get() = app.getSharedPreferences(PREFS, 0)
 
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(a: Activity) {
-            if (a !is MainActivity) adActivity = a
+            if (a !is MainActivity) {
+                adActivity = a
+                Log.i(TAG, "resumed ad candidate: ${a.javaClass.name}")
+            }
         }
         override fun onActivityPaused(a: Activity) { if (a === adActivity) adActivity = null }
         override fun onActivityDestroyed(a: Activity) { if (a === adActivity) adActivity = null }
@@ -37,35 +41,46 @@ class AdAutoCloser(
 
     init { app.registerActivityLifecycleCallbacks(lifecycle) }
 
-    fun startAfterReward(delayMs: Long = 300, timeoutMs: Long = 120_000) {
+    /** Call from MAX onAdDisplayed; wait until the close control actually appears. */
+    fun startWatchingForClose(timeoutMs: Long = 180_000) {
         stop()
-        clickedInActivity = false
-        prefs.edit().putBoolean(KEY_ACTIVE, true).putLong(KEY_LAST_CLICK, 0L).apply()
+        lastViewClickAt = 0L
+        prefs.edit()
+            .putBoolean(KEY_ACTIVE, true)
+            .putLong(KEY_LAST_CLICK, 0L)
+            .putString(KEY_LAST_RESULT, "watching")
+            .apply()
         val startedAt = System.currentTimeMillis()
-        onLog("ожидаю появления кнопки закрытия.")
+        onLog("реклама открыта; жду появления X.")
+        Log.i(TAG, "watching for close control")
         val r = object : Runnable {
             override fun run() {
                 if (!prefs.getBoolean(KEY_ACTIVE, false)) return
-                val elapsed = System.currentTimeMillis() - startedAt
-                if (elapsed >= timeoutMs) {
-                    onLog("кнопка закрытия не найдена; рекламу не принудительно закрываю.")
+                if (System.currentTimeMillis() - startedAt >= timeoutMs) {
+                    onLog("таймаут ожидания X; рекламное окно оставлено открытым.")
                     stop()
                     return
                 }
                 val a = adActivity
-                if (a != null && !a.isFinishing && !clickedInActivity) {
+                if (a != null && !a.isFinishing && System.currentTimeMillis() - lastViewClickAt > 1_500) {
                     val candidate = a.window?.decorView?.let(::findCloseView)
                     if (candidate != null && candidate.isEnabled) {
-                        candidate.performClick()
-                        clickedInActivity = true
-                        onLog("обнаружена кнопка закрытия в окне рекламы; проверяю закрытие.")
+                        val clicked = runCatching { candidate.performClick() }.getOrDefault(false)
+                        lastViewClickAt = System.currentTimeMillis()
+                        Log.i(TAG, "View close candidate clicked=$clicked class=${candidate.javaClass.name}")
+                        onLog(if (clicked) "нажата кнопка закрытия; ожидаю закрытие окна." else "найдена X, но Android View не принял нажатие.")
                     }
                 }
-                main.postDelayed(this, 400)
+                main.postDelayed(this, 350)
             }
         }
         tick = r
-        main.postDelayed(r, delayMs)
+        main.post(r)
+    }
+
+    /** Backward-compatible entry point for older call sites. */
+    fun startAfterReward(delayMs: Long = 300, timeoutMs: Long = 180_000) {
+        main.postDelayed({ startWatchingForClose(timeoutMs) }, delayMs)
     }
 
     fun stop() {
@@ -89,18 +104,19 @@ class AdAutoCloser(
             if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
                 view.isEnabled && view.width in 1..180 && view.height in 1..180) {
                 val location = IntArray(2)
-                view.getLocationInWindow(location)
+                view.getLocationOnScreen(location)
                 val id = runCatching { view.resources.getResourceEntryName(view.id) }
                     .getOrNull()?.lowercase().orEmpty()
                 val description = view.contentDescription?.toString()?.lowercase().orEmpty()
                 val label = (id + " " + description).replace('_', ' ')
-                val explicitClose = listOf(
-                    "close", "dismiss", "skip", "закрыть", "пропустить"
-                ).any(label::contains)
+                val explicitClose = listOf("close", "dismiss", "закрыть", "×", "✕", "✖")
+                    .any(label::contains)
                 val topRightSmallControl = rootWidth > 0 && rootHeight > 0 &&
-                    location[0] > rootWidth * 0.78f &&
-                    location[1] < rootHeight * 0.22f &&
-                    view.width <= 96 && view.height <= 96
+                    location[0] > rootWidth * 0.82f &&
+                    location[1] < rootHeight * 0.18f &&
+                    view.width <= 80 && view.height <= 80 &&
+                    (view.javaClass.simpleName.contains("Image", true) ||
+                     view.javaClass.simpleName.contains("Button", true))
                 if (explicitClose || topRightSmallControl) return view
             }
             if (view is ViewGroup) {
@@ -114,5 +130,7 @@ class AdAutoCloser(
         const val PREFS = "ad_auto_close"
         const val KEY_ACTIVE = "waiting_for_close"
         const val KEY_LAST_CLICK = "last_accessibility_click"
+        const val KEY_LAST_RESULT = "last_result"
+        private const val TAG = "AdCoin.AutoClose"
     }
 }
