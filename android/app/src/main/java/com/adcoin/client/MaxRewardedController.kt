@@ -6,7 +6,9 @@ import com.applovin.mediation.MaxError
 import com.applovin.mediation.MaxReward
 import com.applovin.mediation.MaxRewardedAdListener
 import com.applovin.mediation.ads.MaxRewardedAd
+import com.applovin.sdk.AppLovinMediationProvider
 import com.applovin.sdk.AppLovinSdk
+import com.applovin.sdk.AppLovinSdkInitializationConfiguration
 
 class MaxRewardedController(
     private val activity: Activity,
@@ -31,8 +33,11 @@ class MaxRewardedController(
 
         val sdk = AppLovinSdk.getInstance(activity)
         sdk.settings.userIdentifier = userId
-        sdk.mediationProvider = "max"
-        sdk.initializeSdk {
+        val initConfig = AppLovinSdkInitializationConfiguration.builder(sdkKey)
+            .setMediationProvider(AppLovinMediationProvider.MAX)
+            .build()
+
+        sdk.initialize(initConfig) {
             initialized = true
             val ad = MaxRewardedAd.getInstance(unitId, activity)
             rewardedAd = ad
