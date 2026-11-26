@@ -1,0 +1,62 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-manual
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build debug APK from app branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout app branch
+        uses: actions/checkout@v4
+        with:
+          ref: app
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Android debug APK
+        working-directory: android
+        env:
+          APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
+          APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Collect APK files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          mapfile -t apks < <(find android/app/build/outputs/apk/debug -type f -name '*.apk' -not -path '*/androidTest/*' | sort)
+          if (( ${#apks[@]} == 0 )); then
+            echo "::error::Gradle completed but no debug APK was found."
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            cp "$apk" "dist/$(basename "$apk")"
+          done
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdCoin-debug-apk
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
