@@ -2,6 +2,8 @@
 
 Standalone Android client based on the API and integration findings in the parent repository.
 
+The Android application ID is kept as `com.pavloffmedev.dcn`, matching the package found in the analyzed APK so the existing MAX app/ad-unit configuration can be used. Since the signing key is different, uninstall the official app before installing this debug APK; Android will not install it as an update over a differently signed package.
+
 ## Build
 
 Requires JDK 17, Android SDK 35 and Gradle 8.9.

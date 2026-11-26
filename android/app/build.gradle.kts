@@ -18,7 +18,8 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.adcoin.client"
+        // Keep the package registered for the original AdCoin MAX app.
+        applicationId = "com.pavloffmedev.dcn"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -37,9 +38,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
     packaging {
         resources.excludes += setOf("/META-INF/AL2.0", "/META-INF/LGPL2.1")
     }
