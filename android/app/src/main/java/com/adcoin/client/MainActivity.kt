@@ -51,6 +51,10 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
     val activity = context as? android.app.Activity
     val controller = remember(activity, state.userId) {
         if (activity != null && !state.userId.isNullOrBlank()) {
+            val closer = AdAutoCloser(
+                activity.application,
+                onLog = { vm.setMessage("Автозакрытие: $it") }
+            )
             MaxRewardedController(
                 activity = activity,
                 userId = state.userId!!,
@@ -58,7 +62,8 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
                 onRewarded = vm::onRewarded,
                 onAdLoadedCallback = vm::onMaxAdLoaded,
                 onAdHiddenCallback = vm::onMaxAdHidden,
-                onAdDisplayedCallback = vm::onMaxAdDisplayed
+                onAdDisplayedCallback = vm::onMaxAdDisplayed,
+                autoCloser = closer
             )
         } else null
     }
