@@ -56,21 +56,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val node = queue.removeFirst()
             if (node.isVisibleToUser && node.isEnabled && !isAdCta(node)) {
                 val label = describe(node)
+                // Never infer that an arbitrary small button in the top-right corner is X.
+                // The previous geometry heuristic clicked "другие параметры" and opened the ad.
                 val explicit = CLOSE_WORDS.any(label::contains) || hasXGlyph(node)
-                val rect = Rect().also(node::getBoundsInScreen)
-                val density = resources.displayMetrics.density
-                val maxSize = (96 * density).toInt()
-                val small = rect.width() in 1..maxSize && rect.height() in 1..maxSize
-                val topRight = rect.right >= resources.displayMetrics.widthPixels * 0.78f &&
-                    rect.top <= resources.displayMetrics.heightPixels * 0.22f
-                val className = node.className?.toString().orEmpty()
-                val iconClass = className.contains("ImageButton", true) ||
-                    className.contains("Button", true) ||
-                    className.contains("ImageView", true)
-                // Some ad SDKs expose the X image as a non-clickable child of a clickable container.
                 val clickable = node.isClickable || hasClickableParent(node)
-                val smallTopRightIcon = small && topRight && iconClass && clickable
-                if ((explicit || smallTopRightIcon) && clickable) return node
+                if (explicit && clickable) return node
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
         }
