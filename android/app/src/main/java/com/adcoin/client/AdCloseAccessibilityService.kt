@@ -54,7 +54,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         queue.add(root)
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
-            if (node.isVisibleToUser && node.isEnabled) {
+            if (node.isVisibleToUser && node.isEnabled && !isAdCta(node)) {
                 val label = describe(node)
                 val explicit = CLOSE_WORDS.any(label::contains) || hasXGlyph(node)
                 val rect = Rect().also(node::getBoundsInScreen)
@@ -75,6 +75,18 @@ class AdCloseAccessibilityService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
         }
         return null
+    }
+
+    /** Never treat an ad CTA (including Google Play / Install) as a close control. */
+    private fun isAdCta(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        repeat(6) {
+            if (current == null) return false
+            val label = describe(current!!)
+            if (AD_CTA_WORDS.any(label::contains)) return true
+            current = current!!.parent
+        }
+        return false
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
@@ -133,6 +145,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AdCoin.AccessClose"
         private const val CLICK_COOLDOWN_MS = 1_200L
+        private val AD_CTA_WORDS = listOf(
+            "google play", "play store", "install", "open", "download",
+            "get the app", "get app", "learn more", "shop now",
+            "установить", "скачать", "открыть", "перейти", "подробнее"
+        )
         private val CLOSE_WORDS = listOf("close", "dismiss", "закрыть")
         private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗")
     }
