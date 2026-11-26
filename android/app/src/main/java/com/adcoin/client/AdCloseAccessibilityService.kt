@@ -1,8 +1,6 @@
 package com.adcoin.client
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.GestureDescription
-import android.graphics.Path
 import android.graphics.Rect
 import android.os.SystemClock
 import android.util.Log
@@ -70,7 +68,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val target = findCloseNode(root) ?: continue
             val rect = Rect().also(target::getBoundsInScreen)
             val label = describe(target)
-            val clicked = clickNodeOrParent(target) || tapCenter(rect)
+            // Use the accessibility click action on the confirmed close control only.
+            // Never fall back to a blind coordinate gesture.
+            val clicked = clickNodeOrParent(target)
             Log.i(TAG, "X candidate: package=${event.packageName} label=$label bounds=$rect clicked=$clicked")
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
@@ -110,6 +110,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 val explicit = CLOSE_WORDS.any(label::contains) || hasXGlyph(node)
                 val clickable = node.isClickable || hasClickableParent(node)
                 if (explicit && clickable) return node
+
+                // Confirmed from the supplied ad screenshot: the X is exposed as a
+                // 48–80 px clickable square in the top-right, containing a small Image
+                // descendant (12–32 px). This is a hierarchy/shape match, not a blind tap.
+                if (node.isClickable && hasCloseImageChild(node) &&
+                    matchesTopRightCloseShape(node, root)) return node
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
         }
@@ -126,6 +132,44 @@ class AdCloseAccessibilityService : AccessibilityService() {
             current = current!!.parent
         }
         return false
+    }
+
+    private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
+        val parentRect = Rect().also(parent::getBoundsInScreen)
+        if (parentRect.width() !in 48..80 || parentRect.height() !in 48..80) return false
+
+        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
+        for (i in 0 until parent.childCount) {
+            parent.getChild(i)?.let { queue.add(it to 1) }
+        }
+        while (queue.isNotEmpty()) {
+            val (child, depth) = queue.removeFirst()
+            val className = child.className?.toString().orEmpty()
+            if (child.isVisibleToUser && className.contains("Image", ignoreCase = true)) {
+                val imageRect = Rect().also(child::getBoundsInScreen)
+                if (imageRect.width() in 12..32 && imageRect.height() in 12..32 &&
+                    parentRect.contains(imageRect.centerX(), imageRect.centerY())) return true
+            }
+            if (depth < 3) {
+                for (i in 0 until child.childCount) {
+                    child.getChild(i)?.let { queue.add(it to depth + 1) }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun matchesTopRightCloseShape(
+        node: AccessibilityNodeInfo,
+        root: AccessibilityNodeInfo
+    ): Boolean {
+        val nodeRect = Rect().also(node::getBoundsInScreen)
+        val rootRect = Rect().also(root::getBoundsInScreen)
+        if (rootRect.isEmpty || nodeRect.isEmpty) return false
+        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.14f)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.12f)
+        val inTopRight = nodeRect.left >= rootRect.left + (rootRect.width() * 0.75f)
+        return nearRight && nearTop && inTopRight
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
@@ -168,15 +212,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
             parent = parent.parent
         }
         return false
-    }
-
-    private fun tapCenter(rect: Rect): Boolean {
-        if (rect.isEmpty) return false
-        val path = Path().apply { moveTo(rect.exactCenterX(), rect.exactCenterY()) }
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
-            .build()
-        return dispatchGesture(gesture, null, null)
     }
 
     override fun onInterrupt() = Unit
