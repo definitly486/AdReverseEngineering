@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 AdCoin session helper (static-RE based).
