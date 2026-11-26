@@ -28,11 +28,35 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
+        var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
+        if (expectedPackage.isNullOrBlank()) {
+            val eventPackage = event.packageName?.toString()
+            if (!eventPackage.isNullOrBlank() && eventPackage != packageName &&
+                eventPackage != "com.android.systemui") {
+                expectedPackage = eventPackage
+                prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
+                Log.i(TAG, "locked ad package from first accessibility event: $expectedPackage")
+            }
+        }
+
         val roots = ArrayList<AccessibilityNodeInfo>()
-        rootInActiveWindow?.let(roots::add)
+        rootInActiveWindow?.let { root ->
+            if (expectedPackage != null && root.packageName?.toString() == expectedPackage) {
+                roots.add(root)
+            }
+        }
         runCatching {
-            windows.forEach { window -> window.root?.let(roots::add) }
+            windows.forEach { window ->
+                val candidate = window.root
+                if (candidate != null && expectedPackage != null &&
+                    candidate.packageName?.toString() == expectedPackage) roots.add(candidate)
+            }
         }.onFailure { Log.w(TAG, "cannot enumerate windows", it) }
+
+        if (expectedPackage == null) {
+            Log.v(TAG, "armed; waiting to identify ad package")
+            return
+        }
 
         for (root in roots) {
             val target = findCloseNode(root) ?: continue
