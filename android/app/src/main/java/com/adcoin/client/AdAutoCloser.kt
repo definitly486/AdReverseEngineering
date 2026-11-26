@@ -21,14 +21,25 @@ class AdAutoCloser(
     @Volatile private var adActivity: Activity? = null
     private var tick: Runnable? = null
     private var lastViewClickAt = 0L
+    @Volatile private var adPackageName: String? = null
 
     private val prefs get() = app.getSharedPreferences(PREFS, 0)
 
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(a: Activity) {
             if (a !is MainActivity) {
-                adActivity = a
-                Log.i(TAG, "resumed ad candidate: ${a.javaClass.name}")
+                val expectedPackage = adPackageName
+                if (!prefs.getBoolean(KEY_ACTIVE, false) || expectedPackage == null ||
+                    a.packageName == expectedPackage) {
+                    if (prefs.getBoolean(KEY_ACTIVE, false) && adPackageName == null) {
+                        adPackageName = a.packageName
+                        prefs.edit().putString(KEY_AD_PACKAGE, adPackageName).apply()
+                    }
+                    adActivity = a
+                    Log.i(TAG, "resumed ad candidate: ${a.javaClass.name} package=${a.packageName}")
+                } else {
+                    Log.i(TAG, "ignored non-ad activity package=${a.packageName}; expected=$expectedPackage")
+                }
             }
         }
         override fun onActivityPaused(a: Activity) { if (a === adActivity) adActivity = null }
@@ -45,9 +56,11 @@ class AdAutoCloser(
     fun startWatchingForClose(timeoutMs: Long = 180_000) {
         stop()
         lastViewClickAt = 0L
+        adPackageName = adActivity?.packageName
         prefs.edit()
             .putBoolean(KEY_ACTIVE, true)
             .putLong(KEY_LAST_CLICK, 0L)
+            .putString(KEY_AD_PACKAGE, adPackageName)
             .putString(KEY_LAST_RESULT, "watching")
             .apply()
         val startedAt = System.currentTimeMillis()
@@ -86,7 +99,8 @@ class AdAutoCloser(
     fun stop() {
         tick?.let(main::removeCallbacks)
         tick = null
-        prefs.edit().putBoolean(KEY_ACTIVE, false).apply()
+        prefs.edit().putBoolean(KEY_ACTIVE, false).remove(KEY_AD_PACKAGE).apply()
+        adPackageName = null
     }
 
     fun dispose() {
@@ -134,6 +148,7 @@ class AdAutoCloser(
         const val KEY_ACTIVE = "waiting_for_close"
         const val KEY_LAST_CLICK = "last_accessibility_click"
         const val KEY_LAST_RESULT = "last_result"
+        const val KEY_AD_PACKAGE = "ad_package"
         private val AD_CTA_WORDS = listOf(
             "google play", "play store", "install", "open", "download",
             "get the app", "get app", "learn more", "shop now",
