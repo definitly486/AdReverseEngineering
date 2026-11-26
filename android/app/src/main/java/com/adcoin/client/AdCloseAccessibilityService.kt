@@ -11,11 +11,17 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
- * Clicks whichever appears first: Google Play / Install or Close (X).
- * After clicking Google Play immediately presses BACK to avoid leaving the ad.
+ *
+ * Behaviour:
+ * - Clicks whichever appears first: Google Play / Install or Close (X)
+ * - After clicking Google Play immediately presses BACK (to avoid leaving the ad)
+ * - After ~12 seconds of no success switches to aggressive mode
+ *   (clicks small clickable control in the top-right corner)
  */
 class AdCloseAccessibilityService : AccessibilityService() {
+
     private var lastTreeDumpAt = 0L
+    private var armedAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
@@ -25,8 +31,21 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
         val prefs = getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
-        if (!prefs.getBoolean(AdAutoCloser.KEY_ACTIVE, false)) return
+        if (!prefs.getBoolean(AdAutoCloser.KEY_ACTIVE, false)) {
+            armedAt = 0L
+            return
+        }
+
+        // Запоминаем момент, когда сервис был вооружён
+        if (armedAt == 0L) {
+            armedAt = prefs.getLong(KEY_ARMED_AT, 0L)
+            if (armedAt == 0L) {
+                armedAt = SystemClock.elapsedRealtime()
+                prefs.edit().putLong(KEY_ARMED_AT, armedAt).apply()
+            }
+        }
 
         val now = SystemClock.elapsedRealtime()
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
@@ -35,11 +54,13 @@ class AdCloseAccessibilityService : AccessibilityService() {
         var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
         if (expectedPackage.isNullOrBlank()) {
             val eventPackage = event.packageName?.toString()
-            if (!eventPackage.isNullOrBlank() && eventPackage != packageName &&
-                eventPackage != "com.android.systemui") {
+            if (!eventPackage.isNullOrBlank() &&
+                eventPackage != packageName &&
+                eventPackage != "com.android.systemui"
+            ) {
                 expectedPackage = eventPackage
                 prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
-                Log.i(TAG, "locked ad package from first accessibility event: $expectedPackage")
+                Log.i(TAG, "locked ad package: $expectedPackage")
             }
         }
 
@@ -52,8 +73,10 @@ class AdCloseAccessibilityService : AccessibilityService() {
         runCatching {
             windows.forEach { window ->
                 val candidate = window.root
-                if (candidate != null && expectedPackage != null &&
-                    candidate.packageName?.toString() == expectedPackage) {
+                if (candidate != null &&
+                    expectedPackage != null &&
+                    candidate.packageName?.toString() == expectedPackage
+                ) {
                     roots.add(candidate)
                 }
             }
@@ -66,7 +89,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
             lastTreeDumpAt = now
-            Log.i(TAG, "TREE_DIAG expected=$expectedPackage eventPackage=${event.packageName} roots=${roots.size}")
+            Log.i(TAG, "TREE_DIAG expected=$expectedPackage roots=${roots.size} aggressive=${now - armedAt > AGGRESSIVE_AFTER_MS}")
             roots.forEach { dumpTree(it) }
         }
 
@@ -77,16 +100,23 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val label = describe(node)
 
             val clicked = clickNodeOrParent(node)
-            Log.i(TAG, "clicked first available: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} label=$label bounds=$rect success=$clicked")
+            Log.i(
+                TAG,
+                "clicked first available: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
+                        "label=$label bounds=$rect success=$clicked"
+            )
 
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked")
+                .putString(
+                    AdAutoCloser.KEY_LAST_RESULT,
+                    "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked"
+                )
                 .apply()
 
             if (clicked) {
-                // Если нажали Google Play — сразу возвращаемся, чтобы не уйти в магазин
                 if (isGooglePlay) {
+                    // Не даём уйти в магазин
                     mainHandler.postDelayed({
                         performGlobalAction(GLOBAL_ACTION_BACK)
                         Log.i(TAG, "pressed BACK after Google Play click")
@@ -106,7 +136,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty() && count < MAX_DIAGNOSTIC_NODES) {
             val (node, depth) = queue.removeFirst()
             val bounds = Rect().also(node::getBoundsInScreen)
-            Log.i(TAG, "TREE_NODE depth=$depth text=${node.text} desc=${node.contentDescription} id=${node.viewIdResourceName} click=${node.isClickable} bounds=$bounds")
+            Log.i(
+                TAG,
+                "TREE_NODE depth=$depth text=${node.text} desc=${node.contentDescription} " +
+                        "id=${node.viewIdResourceName} click=${node.isClickable} bounds=$bounds"
+            )
             count++
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { queue.add(it to depth + 1) }
@@ -123,6 +157,10 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
 
+        val now = SystemClock.elapsedRealtime()
+        val aggressive = (now - armedAt) > AGGRESSIVE_AFTER_MS
+        var fallbackTopRight: AccessibilityNodeInfo? = null
+
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
 
@@ -136,18 +174,25 @@ class AdCloseAccessibilityService : AccessibilityService() {
                         return node to true
                     }
 
-                    // Крестик / Close
+                    // Явный крестик по тексту / символу
                     val isClose = CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)
                     if (isClose) {
                         return node to false
                     }
 
-                    // Форма крестика (правый верхний угол)
+                    // Форма крестика (правый верхний угол + маленькая картинка)
                     if (node.isClickable &&
                         hasCloseImageChild(node) &&
                         matchesTopRightCloseShape(node, root)
                     ) {
                         return node to false
+                    }
+
+                    // Агрессивный запасной вариант
+                    if (aggressive && node.isClickable && isSmallTopRight(node, root)) {
+                        if (fallbackTopRight == null) {
+                            fallbackTopRight = node
+                        }
                     }
                 }
             }
@@ -156,25 +201,35 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 node.getChild(i)?.let { queue.add(it) }
             }
         }
+
+        if (aggressive && fallbackTopRight != null) {
+            Log.w(TAG, "aggressive mode: clicking small top-right control")
+            return fallbackTopRight to false
+        }
+
         return null
     }
 
     private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
         val parentRect = Rect().also(parent::getBoundsInScreen)
-        if (parentRect.width() !in 40..100 || parentRect.height() !in 40..100) return false
+        if (parentRect.width() !in 36..110 || parentRect.height() !in 36..110) return false
 
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
         for (i in 0 until parent.childCount) {
             parent.getChild(i)?.let { queue.add(it to 1) }
         }
+
         while (queue.isNotEmpty()) {
             val (child, depth) = queue.removeFirst()
             val className = child.className?.toString().orEmpty()
             if (child.isVisibleToUser && className.contains("Image", ignoreCase = true)) {
                 val imageRect = Rect().also(child::getBoundsInScreen)
-                if (imageRect.width() in 10..40 && imageRect.height() in 10..40 &&
+                if (imageRect.width() in 8..48 &&
+                    imageRect.height() in 8..48 &&
                     parentRect.contains(imageRect.centerX(), imageRect.centerY())
-                ) return true
+                ) {
+                    return true
+                }
             }
             if (depth < 3) {
                 for (i in 0 until child.childCount) {
@@ -193,10 +248,24 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val rootRect = Rect().also(root::getBoundsInScreen)
         if (rootRect.isEmpty || nodeRect.isEmpty) return false
 
-        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.18f)
-        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.15f)
-        val inTopRight = nodeRect.left >= rootRect.left + (rootRect.width() * 0.70f)
+        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.20f)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.18f)
+        val inTopRight = nodeRect.left >= rootRect.left + (rootRect.width() * 0.68f)
         return nearRight && nearTop && inTopRight
+    }
+
+    private fun isSmallTopRight(node: AccessibilityNodeInfo, root: AccessibilityNodeInfo): Boolean {
+        val nodeRect = Rect().also(node::getBoundsInScreen)
+        val rootRect = Rect().also(root::getBoundsInScreen)
+        if (rootRect.isEmpty || nodeRect.isEmpty) return false
+
+        val w = nodeRect.width()
+        val h = nodeRect.height()
+        if (w !in 24..130 || h !in 24..130) return false
+
+        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.25f)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.20f)
+        return nearRight && nearTop
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
@@ -231,14 +300,18 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
         if (node.isClickable && node.isEnabled &&
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        ) return true
+        ) {
+            return true
+        }
 
         var parent = node.parent
         repeat(5) {
             if (parent == null) return false
             if (parent.isClickable && parent.isEnabled &&
                 parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            ) return true
+            ) {
+                return true
+            }
             parent = parent.parent
         }
         return false
@@ -248,9 +321,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AdCoin.AccessClose"
-        private const val CLICK_COOLDOWN_MS = 900L
+        private const val CLICK_COOLDOWN_MS = 800L
         private const val TREE_DUMP_INTERVAL_MS = 2000L
         private const val MAX_DIAGNOSTIC_NODES = 80
+        private const val AGGRESSIVE_AFTER_MS = 12_000L
+        private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
             "google play", "play store", ">> google play", "googleplay",
@@ -259,7 +334,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         )
 
         private val CLOSE_WORDS = listOf(
-            "close", "dismiss", "закрыть", "закрыть рекламу", "skip", "пропустить"
+            "close", "dismiss", "закрыть", "закрыть рекламу",
+            "skip", "пропустить", "закрыть окно"
         )
 
         private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗", "ｘ")
