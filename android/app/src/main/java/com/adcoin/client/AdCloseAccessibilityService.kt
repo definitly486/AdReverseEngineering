@@ -2,6 +2,8 @@ package com.adcoin.client
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -9,12 +11,12 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
- * Priority:
- *   1. Google Play / Install button (appears during video)
- *   2. Regular close control (X / close / dismiss) that appears after Google Play
+ * Clicks whichever appears first: Google Play / Install or Close (X).
+ * After clicking Google Play immediately presses BACK to avoid leaving the ad.
  */
 class AdCloseAccessibilityService : AccessibilityService() {
     private var lastTreeDumpAt = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -51,7 +53,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
             windows.forEach { window ->
                 val candidate = window.root
                 if (candidate != null && expectedPackage != null &&
-                    candidate.packageName?.toString() == expectedPackage) roots.add(candidate)
+                    candidate.packageName?.toString() == expectedPackage) {
+                    roots.add(candidate)
+                }
             }
         }.onFailure { Log.w(TAG, "cannot enumerate windows", it) }
 
@@ -62,26 +66,39 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
             lastTreeDumpAt = now
-            Log.i(TAG, "TREE_DIAG expected=$expectedPackage eventPackage=${event.packageName} roots=${roots.size} activeRootPackage=${rootInActiveWindow?.packageName}")
+            Log.i(TAG, "TREE_DIAG expected=$expectedPackage eventPackage=${event.packageName} roots=${roots.size}")
             roots.forEach { dumpTree(it) }
         }
 
         for (root in roots) {
-            val target = findCloseNode(root) ?: continue
-            val rect = Rect().also(target::getBoundsInScreen)
-            val label = describe(target)
-            val clicked = clickNodeOrParent(target)
-            Log.i(TAG, "candidate: package=${event.packageName} label=$label bounds=$rect clicked=$clicked")
+            val result = findFirstTarget(root) ?: continue
+            val (node, isGooglePlay) = result
+            val rect = Rect().also(node::getBoundsInScreen)
+            val label = describe(node)
+
+            val clicked = clickNodeOrParent(node)
+            Log.i(TAG, "clicked first available: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} label=$label bounds=$rect success=$clicked")
+
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "candidate=$label clicked=$clicked")
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked")
                 .apply()
-            if (clicked) return
+
+            if (clicked) {
+                // Если нажали Google Play — сразу возвращаемся, чтобы не уйти в магазин
+                if (isGooglePlay) {
+                    mainHandler.postDelayed({
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                        Log.i(TAG, "pressed BACK after Google Play click")
+                    }, 350)
+                }
+                return
+            }
         }
-        Log.v(TAG, "armed; no clickable control in accessibility tree (package=${event.packageName}, event=${event.eventType})")
+
+        Log.v(TAG, "armed; nothing clickable yet")
     }
 
-    /** Diagnostic only: records the actual exposed accessibility nodes; never clicks them. */
     private fun dumpTree(root: AccessibilityNodeInfo) {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
         queue.add(root to 0)
@@ -89,61 +106,62 @@ class AdCloseAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty() && count < MAX_DIAGNOSTIC_NODES) {
             val (node, depth) = queue.removeFirst()
             val bounds = Rect().also(node::getBoundsInScreen)
-            Log.i(TAG, "TREE_NODE depth=$depth pkg=${node.packageName} class=${node.className} text=${node.text} desc=${node.contentDescription} id=${node.viewIdResourceName} click=${node.isClickable} enabled=${node.isEnabled} visible=${node.isVisibleToUser} bounds=$bounds")
+            Log.i(TAG, "TREE_NODE depth=$depth text=${node.text} desc=${node.contentDescription} id=${node.viewIdResourceName} click=${node.isClickable} bounds=$bounds")
             count++
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { queue.add(it to depth + 1) }
             }
         }
-        Log.i(TAG, "TREE_DIAG_END nodes=$count truncated=${queue.isNotEmpty()}")
+        Log.i(TAG, "TREE_DIAG_END nodes=$count")
     }
 
-    private fun findCloseNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    /**
+     * Возвращает первую найденную кнопку (без приоритета).
+     * Pair(node, isGooglePlay)
+     */
+    private fun findFirstTarget(root: AccessibilityNodeInfo): Pair<AccessibilityNodeInfo, Boolean>? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
 
-        var googlePlayCandidate: AccessibilityNodeInfo? = null
-        var closeCandidate: AccessibilityNodeInfo? = null
-
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
+
             if (node.isVisibleToUser && node.isEnabled) {
                 val label = describe(node)
                 val clickable = node.isClickable || hasClickableParent(node)
 
                 if (clickable) {
-                    // 1. Priority: Google Play / Install button
-                    if (googlePlayCandidate == null &&
-                        GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
-                        googlePlayCandidate = node
+                    // Google Play / Install
+                    if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
+                        return node to true
                     }
 
-                    // 2. Regular close / X
+                    // Крестик / Close
                     val isClose = CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)
-                    if (closeCandidate == null && isClose) {
-                        closeCandidate = node
+                    if (isClose) {
+                        return node to false
                     }
 
-                    // 3. Shape-based close in top-right corner
-                    if (closeCandidate == null &&
-                        node.isClickable &&
+                    // Форма крестика (правый верхний угол)
+                    if (node.isClickable &&
                         hasCloseImageChild(node) &&
                         matchesTopRightCloseShape(node, root)
                     ) {
-                        closeCandidate = node
+                        return node to false
                     }
                 }
             }
-            for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
-        }
 
-        // First try Google Play, then fall back to close button
-        return googlePlayCandidate ?: closeCandidate
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it) }
+            }
+        }
+        return null
     }
 
     private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
         val parentRect = Rect().also(parent::getBoundsInScreen)
-        if (parentRect.width() !in 48..80 || parentRect.height() !in 48..80) return false
+        if (parentRect.width() !in 40..100 || parentRect.height() !in 40..100) return false
 
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
         for (i in 0 until parent.childCount) {
@@ -154,8 +172,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val className = child.className?.toString().orEmpty()
             if (child.isVisibleToUser && className.contains("Image", ignoreCase = true)) {
                 val imageRect = Rect().also(child::getBoundsInScreen)
-                if (imageRect.width() in 12..32 && imageRect.height() in 12..32 &&
-                    parentRect.contains(imageRect.centerX(), imageRect.centerY())) return true
+                if (imageRect.width() in 10..40 && imageRect.height() in 10..40 &&
+                    parentRect.contains(imageRect.centerX(), imageRect.centerY())
+                ) return true
             }
             if (depth < 3) {
                 for (i in 0 until child.childCount) {
@@ -173,9 +192,10 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val nodeRect = Rect().also(node::getBoundsInScreen)
         val rootRect = Rect().also(root::getBoundsInScreen)
         if (rootRect.isEmpty || nodeRect.isEmpty) return false
-        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.14f)
-        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.12f)
-        val inTopRight = nodeRect.left >= rootRect.left + (rootRect.width() * 0.75f)
+
+        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.18f)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.15f)
+        val inTopRight = nodeRect.left >= rootRect.left + (rootRect.width() * 0.70f)
         return nearRight && nearTop && inTopRight
     }
 
@@ -210,12 +230,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
         if (node.isClickable && node.isEnabled &&
-            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        ) return true
+
         var parent = node.parent
         repeat(5) {
             if (parent == null) return false
             if (parent.isClickable && parent.isEnabled &&
-                parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            ) return true
             parent = parent.parent
         }
         return false
@@ -225,17 +248,20 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AdCoin.AccessClose"
-        private const val CLICK_COOLDOWN_MS = 1_200L
-        private const val TREE_DUMP_INTERVAL_MS = 2_000L
-        private const val MAX_DIAGNOSTIC_NODES = 100
+        private const val CLICK_COOLDOWN_MS = 900L
+        private const val TREE_DUMP_INTERVAL_MS = 2000L
+        private const val MAX_DIAGNOSTIC_NODES = 80
 
         private val GOOGLE_PLAY_WORDS = listOf(
             "google play", "play store", ">> google play", "googleplay",
             "install", ">> install", "install app", "get the app", "get app",
-            "установить", "скачать", "открыть в google play", "перейти"
+            "установить", "скачать", "открыть в google play"
         )
 
-        private val CLOSE_WORDS = listOf("close", "dismiss", "закрыть")
-        private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗")
+        private val CLOSE_WORDS = listOf(
+            "close", "dismiss", "закрыть", "закрыть рекламу", "skip", "пропустить"
+        )
+
+        private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗", "ｘ")
     }
 }
