@@ -28,25 +28,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate Android Gradle project
-        id: project
-        shell: bash
-        run: |
-          set -euo pipefail
-          wrapper="$(find . -type f -name gradlew -not -path './.git/*' -print -quit)"
-          if [[ -z "$wrapper" ]]; then
-            echo "::error::No gradlew found. Add the Android Gradle project and its Gradle wrapper to this branch."
-            exit 1
-          fi
-          project_dir="$(dirname "$wrapper")"
-          chmod +x "$wrapper"
-          echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
-          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
-          echo "Using Gradle project at: $project_dir"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-      - name: Build debug APK
-        working-directory: ${{ steps.project.outputs.dir }}
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
+      - name: Build Android debug APK
+        working-directory: android
+        env:
+          APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
+          APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
+        run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Sign APK with the persistent project debug key
         env:
@@ -68,7 +60,7 @@ jobs:
 
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/project-debug.keystore"
           mkdir -p dist
-          mapfile -t apks < <(find . -type f -path '*/build/outputs/apk/*' -name '*debug*.apk' -not -path '*/androidTest/*' | sort)
+          mapfile -t apks < <(find android/app/build/outputs/apk -type f -name '*debug*.apk' -not -path '*/androidTest/*' | sort)
           if (( ${#apks[@]} == 0 )); then
             echo "::error::Gradle completed but no debug APK was found."
             exit 1
@@ -93,7 +85,7 @@ jobs:
       - name: Upload signed debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: AdReverseEngineering-debug-apk
+          name: AdCoin-debug-apk
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 14
