@@ -16,7 +16,10 @@ class MaxRewardedController(
     private val activity: Activity,
     private val userId: String,
     private val onMessage: (String) -> Unit,
-    private val onRewarded: () -> Unit
+    private val onRewarded: () -> Unit,
+    private val onAdLoadedCallback: () -> Unit,
+    private val onAdHiddenCallback: () -> Unit,
+    private val onAdDisplayedCallback: () -> Unit
 ) : MaxRewardedAdListener {
     private val logTag = "AdCoin.MAX"
 
@@ -88,6 +91,7 @@ class MaxRewardedController(
     override fun onAdLoaded(ad: MaxAd) {
         logEvent("onAdLoaded", ad)
         onMessage("Реклама готова к показу.")
+        onAdLoadedCallback()
     }
 
     override fun onAdLoadFailed(adUnitId: String, error: MaxError) {
@@ -97,6 +101,7 @@ class MaxRewardedController(
 
     override fun onAdDisplayed(ad: MaxAd) {
         logEvent("onAdDisplayed", ad)
+        onAdDisplayedCallback()
     }
 
     // MAX SDK 13.x does not expose separate rewarded-video started/completed callbacks.
@@ -104,7 +109,8 @@ class MaxRewardedController(
 
     override fun onAdHidden(ad: MaxAd) {
         logEvent("onAdHidden", ad)
-        // Preload next creative only after MAX reports that the ad is hidden.
+        // Notify the app, then preload. The app never dismisses the ad itself.
+        onAdHiddenCallback()
         rewardedAd?.loadAd()
     }
 
