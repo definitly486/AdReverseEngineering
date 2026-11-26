@@ -116,15 +116,11 @@ class AdAutoCloser(
                     }
                     continue
                 }
+                // Only click a semantically identified close control. Position/size alone
+                // previously matched unrelated ad controls such as "другие параметры".
                 val explicitClose = listOf("close", "dismiss", "закрыть", "×", "✕", "✖")
                     .any(label::contains)
-                val topRightSmallControl = rootWidth > 0 && rootHeight > 0 &&
-                    location[0] > rootWidth * 0.82f &&
-                    location[1] < rootHeight * 0.18f &&
-                    view.width <= 80 && view.height <= 80 &&
-                    (view.javaClass.simpleName.contains("Image", true) ||
-                     view.javaClass.simpleName.contains("Button", true))
-                if (explicitClose || topRightSmallControl) return view
+                if (explicitClose) return view
             }
             if (view is ViewGroup) {
                 for (i in 0 until view.childCount) queue.add(view.getChildAt(i))
