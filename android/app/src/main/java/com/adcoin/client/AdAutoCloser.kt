@@ -21,6 +21,7 @@ class AdAutoCloser(
     @Volatile private var adActivity: Activity? = null
     private var tick: Runnable? = null
     private var lastViewClickAt = 0L
+    private var lastViewDumpAt = 0L
     @Volatile private var adPackageName: String? = null
 
     private val prefs get() = app.getSharedPreferences(PREFS, 0)
@@ -115,6 +116,14 @@ class AdAutoCloser(
         val rootHeight = root.height.toFloat()
         while (queue.isNotEmpty()) {
             val view = queue.removeFirst()
+            if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
+                System.currentTimeMillis() - lastViewDumpAt >= 2_000L) {
+                val location = IntArray(2)
+                view.getLocationOnScreen(location)
+                val id = runCatching { view.resources.getResourceEntryName(view.id) }.getOrNull().orEmpty()
+                Log.i(TAG, "VIEW_DIAG class=${view.javaClass.name} id=$id desc=${view.contentDescription} text=${(view as? android.widget.TextView)?.text} size=${view.width}x${view.height} at=${location[0]},${location[1]}")
+                lastViewDumpAt = System.currentTimeMillis()
+            }
             if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
                 view.isEnabled && view.width in 1..180 && view.height in 1..180) {
                 val location = IntArray(2)
