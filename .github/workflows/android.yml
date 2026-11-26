@@ -65,13 +65,13 @@ jobs:
           APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
           APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.code }}
-          ANDROID_VERSION_NAME: 1.0.${{ github.run_number + 288 }}
+          ANDROID_VERSION_NAME: 1.0.${{ steps.version.outputs.code }}
         run: gradle --no-daemon --stacktrace assembleRelease
 
       - name: Prepare release files
         id: release
         env:
-          VERSION_CODE: ${{ github.run_number + 288 }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           set -euo pipefail
           mkdir -p dist
