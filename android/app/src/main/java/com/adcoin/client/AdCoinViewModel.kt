@@ -28,10 +28,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     private val store = SecureSessionStore(application)
     private val api = AdCoinApi(store)
     private val _state = MutableStateFlow(
-        ClientState(
-            tokenPresent = !store.token().isNullOrBlank(),
-            userId = store.userId()
-        )
+        ClientState(tokenPresent = !store.token().isNullOrBlank(), userId = store.userId())
     )
     val state: StateFlow<ClientState> = _state.asStateFlow()
 
@@ -41,6 +38,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setEmail(value: String) { _state.value = _state.value.copy(email = value, message = null) }
     fun setCode(value: String) { _state.value = _state.value.copy(code = value, message = null) }
+    fun setMessage(value: String) { _state.value = _state.value.copy(message = value) }
 
     fun sendCode() {
         val email = _state.value.email.trim()
@@ -113,25 +111,24 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _state.value = _state.value.copy(checkingReward = true, message = "Реклама завершена. Проверяем серверный баланс…")
             var credited = false
-            repeat(12) {
+            for (attempt in 0 until 12) {
                 delay(5_000)
                 val previous = _state.value.balance
                 val result = runCatching { api.wallet() }.getOrNull()
                 if (result != null) {
                     store.updateUserId(result.userId)
+                    val next = result.balance
                     _state.value = _state.value.copy(
-                        balance = result.balance ?: _state.value.balance,
+                        balance = next ?: _state.value.balance,
                         dailyProgress = result.dailyProgress ?: _state.value.dailyProgress,
                         dailyTarget = result.dailyTarget ?: _state.value.dailyTarget,
                         userId = result.userId ?: store.userId()
                     )
-                    val next = result.balance
                     if (previous != null && next != null && next > previous + 0.0001) {
                         credited = true
-                        return@repeat
+                        break
                     }
                 }
-                if (credited) return@repeat
             }
             _state.value = _state.value.copy(
                 checkingReward = false,

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,7 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
@@ -49,6 +49,19 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val activity = context as? android.app.Activity
+    val controller = remember(activity, state.userId) {
+        if (activity != null && !state.userId.isNullOrBlank()) {
+            MaxRewardedController(
+                activity = activity,
+                userId = state.userId!!,
+                onMessage = vm::setMessage,
+                onRewarded = vm::onRewarded
+            )
+        } else null
+    }
+    LaunchedEffect(controller) {
+        controller?.initializeAndLoad()
+    }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Color(0xFF8BDAA8),
@@ -60,19 +73,7 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
             if (!state.tokenPresent) {
                 LoginScreen(state, vm)
             } else {
-                DashboardScreen(state, vm) {
-                    if (activity != null && !state.userId.isNullOrBlank()) {
-                        val controller = remember(state.userId) {
-                            MaxRewardedController(
-                                activity = activity,
-                                userId = state.userId!!,
-                                onMessage = { /* UI status is driven by the ViewModel. */ },
-                                onRewarded = vm::onRewarded
-                            )
-                        }
-                        controller.show()
-                    }
-                }
+                DashboardScreen(state, vm, onWatchAd = { controller?.show() })
             }
         }
     }

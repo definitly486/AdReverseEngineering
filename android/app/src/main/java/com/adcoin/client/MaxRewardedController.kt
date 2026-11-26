@@ -2,9 +2,9 @@ package com.adcoin.client
 
 import android.app.Activity
 import com.applovin.mediation.MaxAd
-import com.applovin.mediation.MaxAdListener
 import com.applovin.mediation.MaxError
 import com.applovin.mediation.MaxReward
+import com.applovin.mediation.MaxRewardedAdListener
 import com.applovin.mediation.ads.MaxRewardedAd
 import com.applovin.sdk.AppLovinSdk
 
@@ -13,7 +13,7 @@ class MaxRewardedController(
     private val userId: String,
     private val onMessage: (String) -> Unit,
     private val onRewarded: () -> Unit
-) : MaxAdListener {
+) : MaxRewardedAdListener {
     private var rewardedAd: MaxRewardedAd? = null
     private var initialized = false
 
@@ -72,7 +72,7 @@ class MaxRewardedController(
         onMessage("Не удалось показать рекламу (код ${error.code}).")
         rewardedAd?.loadAd()
     }
-    override fun onAdReceivedReward(ad: MaxAd, reward: MaxReward) {
+    override fun onUserRewarded(ad: MaxAd, reward: MaxReward) {
         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
         onRewarded()
     }
