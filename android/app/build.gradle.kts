@@ -24,6 +24,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         manifestPlaceholders["applovinSdkKey"] = applovinSdkKey
+        buildConfigField("String", "APPLOVIN_SDK_KEY", "\"$applovinSdkKey\"")
         buildConfigField("String", "APPLOVIN_REWARDED_AD_UNIT_ID", "\"$rewardedAdUnitId\"")
     }
 
@@ -40,10 +41,7 @@ android {
         jvmTarget = "17"
     }
     packaging {
-        resources.excludes += setOf(
-            "/META-INF/AL2.0",
-            "/META-INF/LGPL2.1"
-        )
+        resources.excludes += setOf("/META-INF/AL2.0", "/META-INF/LGPL2.1")
     }
 }
 
