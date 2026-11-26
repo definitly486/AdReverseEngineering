@@ -9,7 +9,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
- * It searches for an actual close control (X / close / dismiss), never CTA buttons.
+ * Priority:
+ *   1. Google Play / Install button (appears during video)
+ *   2. Regular close control (X / close / dismiss) that appears after Google Play
  */
 class AdCloseAccessibilityService : AccessibilityService() {
     private var lastTreeDumpAt = 0L
@@ -68,17 +70,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val target = findCloseNode(root) ?: continue
             val rect = Rect().also(target::getBoundsInScreen)
             val label = describe(target)
-            // Use the accessibility click action on the confirmed close control only.
-            // Never fall back to a blind coordinate gesture.
             val clicked = clickNodeOrParent(target)
-            Log.i(TAG, "X candidate: package=${event.packageName} label=$label bounds=$rect clicked=$clicked")
+            Log.i(TAG, "candidate: package=${event.packageName} label=$label bounds=$rect clicked=$clicked")
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "X candidate=$label clicked=$clicked")
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "candidate=$label clicked=$clicked")
                 .apply()
             if (clicked) return
         }
-        Log.v(TAG, "armed; no X control in accessibility tree (package=${event.packageName}, event=${event.eventType})")
+        Log.v(TAG, "armed; no clickable control in accessibility tree (package=${event.packageName}, event=${event.eventType})")
     }
 
     /** Diagnostic only: records the actual exposed accessibility nodes; never clicks them. */
@@ -101,37 +101,44 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private fun findCloseNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
+
+        var googlePlayCandidate: AccessibilityNodeInfo? = null
+        var closeCandidate: AccessibilityNodeInfo? = null
+
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
-            if (node.isVisibleToUser && node.isEnabled && !isAdCta(node)) {
+            if (node.isVisibleToUser && node.isEnabled) {
                 val label = describe(node)
-                // Never infer that an arbitrary small button in the top-right corner is X.
-                // The previous geometry heuristic clicked "другие параметры" and opened the ad.
-                val explicit = CLOSE_WORDS.any(label::contains) || hasXGlyph(node)
                 val clickable = node.isClickable || hasClickableParent(node)
-                if (explicit && clickable) return node
 
-                // Confirmed from the supplied ad screenshot: the X is exposed as a
-                // 48–80 px clickable square in the top-right, containing a small Image
-                // descendant (12–32 px). This is a hierarchy/shape match, not a blind tap.
-                if (node.isClickable && hasCloseImageChild(node) &&
-                    matchesTopRightCloseShape(node, root)) return node
+                if (clickable) {
+                    // 1. Priority: Google Play / Install button
+                    if (googlePlayCandidate == null &&
+                        GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
+                        googlePlayCandidate = node
+                    }
+
+                    // 2. Regular close / X
+                    val isClose = CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)
+                    if (closeCandidate == null && isClose) {
+                        closeCandidate = node
+                    }
+
+                    // 3. Shape-based close in top-right corner
+                    if (closeCandidate == null &&
+                        node.isClickable &&
+                        hasCloseImageChild(node) &&
+                        matchesTopRightCloseShape(node, root)
+                    ) {
+                        closeCandidate = node
+                    }
+                }
             }
             for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
         }
-        return null
-    }
 
-    /** Never treat an ad CTA (including Google Play / Install) as a close control. */
-    private fun isAdCta(node: AccessibilityNodeInfo): Boolean {
-        var current: AccessibilityNodeInfo? = node
-        repeat(6) {
-            if (current == null) return false
-            val label = describe(current!!)
-            if (AD_CTA_WORDS.any(label::contains)) return true
-            current = current!!.parent
-        }
-        return false
+        // First try Google Play, then fall back to close button
+        return googlePlayCandidate ?: closeCandidate
     }
 
     private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
@@ -221,11 +228,13 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val CLICK_COOLDOWN_MS = 1_200L
         private const val TREE_DUMP_INTERVAL_MS = 2_000L
         private const val MAX_DIAGNOSTIC_NODES = 100
-        private val AD_CTA_WORDS = listOf(
-            "google play", "play store", "install", "open", "download",
-            "get the app", "get app", "learn more", "shop now",
-            "установить", "скачать", "открыть", "перейти", "подробнее"
+
+        private val GOOGLE_PLAY_WORDS = listOf(
+            "google play", "play store", ">> google play", "googleplay",
+            "install", ">> install", "install app", "get the app", "get app",
+            "установить", "скачать", "открыть в google play", "перейти"
         )
+
         private val CLOSE_WORDS = listOf("close", "dismiss", "закрыть")
         private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗")
     }
