@@ -19,7 +19,8 @@ class MaxRewardedController(
     private val onRewarded: () -> Unit,
     private val onAdLoadedCallback: () -> Unit,
     private val onAdHiddenCallback: () -> Unit,
-    private val onAdDisplayedCallback: () -> Unit
+    private val onAdDisplayedCallback: () -> Unit,
+    private val autoCloser: AdAutoCloser? = null
 ) : MaxRewardedAdListener {
     private val logTag = "AdCoin.MAX"
 
@@ -32,8 +33,6 @@ class MaxRewardedController(
 
     private var rewardedAd: MaxRewardedAd? = null
     private var initialized = false
-
-    /** One onUserRewarded per shown creative. */
     private val rewardConsumedForCurrentAd = AtomicBoolean(false)
 
     fun initializeAndLoad() {
@@ -47,13 +46,11 @@ class MaxRewardedController(
             onMessage("Не найден внутренний ID аккаунта AdCoin. MAX не запущен.")
             return
         }
-
         val sdk = AppLovinSdk.getInstance(activity)
         sdk.settings.userIdentifier = userId
         val initConfig = AppLovinSdkInitializationConfiguration.builder(sdkKey)
             .setMediationProvider(AppLovinMediationProvider.MAX)
             .build()
-
         sdk.initialize(initConfig) {
             initialized = true
             val ad = MaxRewardedAd.getInstance(unitId, activity)
@@ -66,10 +63,6 @@ class MaxRewardedController(
 
     fun isReady(): Boolean = initialized && (rewardedAd?.isReady == true)
 
-    /**
-     * Show only on explicit user action.
-     * No auto-show even if an ad is already loaded.
-     */
     fun show(): Boolean {
         val ad = rewardedAd
         if (!initialized || ad == null) {
@@ -82,7 +75,6 @@ class MaxRewardedController(
             ad.loadAd()
             return false
         }
-        // New impression — allow exactly one onUserRewarded.
         rewardConsumedForCurrentAd.set(false)
         ad.showAd()
         return true
@@ -93,39 +85,27 @@ class MaxRewardedController(
         onMessage("Реклама готова к показу.")
         onAdLoadedCallback()
     }
-
     override fun onAdLoadFailed(adUnitId: String, error: MaxError) {
         logEvent("onAdLoadFailed", details = "adUnit=$adUnitId code=${error.code} message=${error.message}")
         onMessage("Не удалось загрузить рекламу (код ${error.code}).")
     }
-
     override fun onAdDisplayed(ad: MaxAd) {
         logEvent("onAdDisplayed", ad)
         onAdDisplayedCallback()
     }
-
-    // MAX SDK 13.x does not expose separate rewarded-video started/completed callbacks.
-    // Track the supported lifecycle through onAdDisplayed(), onUserRewarded(), and onAdHidden().
-
     override fun onAdHidden(ad: MaxAd) {
         logEvent("onAdHidden", ad)
-        // Notify the app, then preload. The app never dismisses the ad itself.
+        autoCloser?.stop()
         onAdHiddenCallback()
         rewardedAd?.loadAd()
     }
-
-    override fun onAdClicked(ad: MaxAd) {
-        logEvent("onAdClicked", ad)
-    }
-
+    override fun onAdClicked(ad: MaxAd) { logEvent("onAdClicked", ad) }
     override fun onAdDisplayFailed(ad: MaxAd, error: MaxError) {
         logEvent("onAdDisplayFailed", ad, "code=${error.code} message=${error.message}")
         onMessage("Не удалось показать рекламу (код ${error.code}).")
         rewardedAd?.loadAd()
     }
-
     override fun onUserRewarded(ad: MaxAd, reward: MaxReward) {
-        // Ignore duplicate callback for the same impression.
         if (!rewardConsumedForCurrentAd.compareAndSet(false, true)) {
             onMessage("Повторный onUserRewarded проигнорирован (уже обработан).")
             return
@@ -133,5 +113,6 @@ class MaxRewardedController(
         logEvent("onUserRewarded", ad, "amount=${reward.amount} label=${reward.label}")
         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
         onRewarded()
+        autoCloser?.startAfterReward()
     }
 }
