@@ -109,6 +109,13 @@ class AdAutoCloser(
                     .getOrNull()?.lowercase().orEmpty()
                 val description = view.contentDescription?.toString()?.lowercase().orEmpty()
                 val label = (id + " " + description).replace('_', ' ')
+                // A store/install CTA must never be clicked by the ad auto-closer.
+                if (AD_CTA_WORDS.any(label::contains)) {
+                    if (view is ViewGroup) {
+                        for (i in 0 until view.childCount) queue.add(view.getChildAt(i))
+                    }
+                    continue
+                }
                 val explicitClose = listOf("close", "dismiss", "закрыть", "×", "✕", "✖")
                     .any(label::contains)
                 val topRightSmallControl = rootWidth > 0 && rootHeight > 0 &&
@@ -131,6 +138,11 @@ class AdAutoCloser(
         const val KEY_ACTIVE = "waiting_for_close"
         const val KEY_LAST_CLICK = "last_accessibility_click"
         const val KEY_LAST_RESULT = "last_result"
+        private val AD_CTA_WORDS = listOf(
+            "google play", "play store", "install", "open", "download",
+            "get the app", "get app", "learn more", "shop now",
+            "установить", "скачать", "открыть", "перейти", "подробнее"
+        )
         private const val TAG = "AdCoin.AutoClose"
     }
 }
