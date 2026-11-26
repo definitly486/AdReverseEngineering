@@ -12,6 +12,13 @@ val rewardedAdUnitId = providers.gradleProperty("APPLOVIN_REWARDED_AD_UNIT_ID")
     .orElse(providers.environmentVariable("APPLOVIN_REWARDED_AD_UNIT_ID"))
     .orElse("")
     .get()
+val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
+    .orElse("1")
+    .get()
+    .toInt()
+val androidVersionName = providers.environmentVariable("ANDROID_VERSION_NAME")
+    .orElse("1.0.$androidVersionCode")
+    .get()
 
 android {
     namespace = "com.adcoin.client"
@@ -21,11 +28,27 @@ android {
         applicationId = "com.pavloffmedev.dcn"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = androidVersionCode
+        versionName = androidVersionName
         manifestPlaceholders["applovinSdkKey"] = applovinSdkKey
         buildConfigField("String", "APPLOVIN_SDK_KEY", "\"$applovinSdkKey\"")
         buildConfigField("String", "APPLOVIN_REWARDED_AD_UNIT_ID", "\"$rewardedAdUnitId\"")
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH") ?: "release.keystore")
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
     }
 
     buildFeatures {
