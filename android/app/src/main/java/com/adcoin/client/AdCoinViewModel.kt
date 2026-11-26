@@ -26,7 +26,11 @@ data class ClientState(
     val infiniteMode: Boolean = false,
     val awaitNextConfirm: Boolean = false,
     val videosCompleted: Int = 0,
-    val rewardInFlight: Boolean = false
+    val rewardInFlight: Boolean = false,
+    val adReady: Boolean = false,
+    val adHidden: Boolean = false,
+    val rewardVerifiedForAd: Boolean = false,
+    val autoShowNext: Boolean = false
 )
 
 class AdCoinViewModel(application: Application) : AndroidViewModel(application) {
@@ -150,6 +154,42 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         return true
     }
 
+
+    /** MAX lifecycle callbacks coordinate the next impression. */
+    fun onMaxAdLoaded() {
+        _state.value = _state.value.copy(adReady = true)
+        maybeScheduleNextAd()
+    }
+
+    fun onMaxAdDisplayed() {
+        _state.value = _state.value.copy(
+            adReady = false, adHidden = false,
+            rewardVerifiedForAd = false, autoShowNext = false
+        )
+    }
+
+    fun onMaxAdHidden() {
+        _state.value = _state.value.copy(adHidden = true)
+        maybeScheduleNextAd()
+    }
+
+    private fun maybeScheduleNextAd() {
+        val s = _state.value
+        if (s.infiniteMode && s.adHidden && s.adReady &&
+            s.rewardVerifiedForAd && !s.rewardInFlight && !s.checkingReward &&
+            !s.autoShowNext
+        ) {
+            _state.value = s.copy(
+                autoShowNext = true,
+                message = "Награда подтверждена, реклама закрыта. Запускаем следующее видео…"
+            )
+        }
+    }
+
+    fun consumeAutoShowRequest() {
+        _state.value = _state.value.copy(autoShowNext = false)
+    }
+
     fun onRewarded() {
         // Guard against re-entrant / duplicate reward processing.
         if (_state.value.rewardInFlight) {
@@ -183,24 +223,25 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
             val wasInfinite = _state.value.infiniteMode
-            val completed = _state.value.videosCompleted + 1
+            val completed = _state.value.videosCompleted + if (credited) 1 else 0
             _state.value = _state.value.copy(
                 checkingReward = false,
                 rewardInFlight = false,
                 videosCompleted = completed,
-                // After every completed impression, require explicit consent for the next one.
-                awaitNextConfirm = wasInfinite,
+                rewardVerifiedForAd = credited,
+                awaitNextConfirm = false,
                 message = when {
                     credited && wasInfinite ->
-                        "Сервер подтвердил начисление (#$completed). Нажмите «Следующее видео» или «Стоп»."
+                        "Сервер подтвердил начисление (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
                     credited ->
                         "Сервер подтвердил увеличение баланса."
                     wasInfinite ->
-                        "Показ #$completed завершён, серверное начисление пока не видно. «Следующее видео» или «Стоп»."
+                        "Сервер пока не подтвердил награду. Автоматический следующий показ остановлен."
                     else ->
                         "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
                 }
             )
+            maybeScheduleNextAd()
         }
     }
 
