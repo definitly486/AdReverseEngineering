@@ -1,0 +1,163 @@
+AppLovin SDK-key search report
+Input: /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx
+
+Likely key candidates: 0
+No key value was extracted automatically.
+
+SDK/AppLovin references without a confident value: 11206
+- resources/AndroidManifest.xml (line 286) [AppLovin reference]: android:name="com.applovin.sdk.AppLovinInitProvider"
+- resources/AndroidManifest.xml (line 288) [AppLovin reference]: android:authorities="com.pavloffmedev.dcn.applovininitprovider"
+- resources/AndroidManifest.xml (line 292) [AppLovin reference]: android:name="com.applovin.adview.AppLovinFullscreenActivity"
+- resources/AndroidManifest.xml (line 300) [AppLovin reference]: android:name="com.applovin.adview.AppLovinFullscreenImmersiveActivity"
+- resources/AndroidManifest.xml (line 306) [AppLovin reference]: android:name="com.applovin.sdk.AppLovinWebViewActivity"
+- resources/AndroidManifest.xml (line 309) [AppLovin reference]: android:theme="@style/com.applovin.mediation.MaxDebuggerActivity.Theme"
+- resources/AndroidManifest.xml (line 310) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerActivity"
+- resources/AndroidManifest.xml (line 314) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerDetailActivity"
+- resources/AndroidManifest.xml (line 318) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerMultiAdActivity"
+- resources/AndroidManifest.xml (line 322) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerAdUnitsListActivity"
+- resources/AndroidManifest.xml (line 326) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerAdUnitWaterfallsListActivity"
+- resources/AndroidManifest.xml (line 330) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerAdUnitDetailActivity"
+- resources/AndroidManifest.xml (line 334) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerCmpNetworksListActivity"
+- resources/AndroidManifest.xml (line 338) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerTcfConsentStatusesListActivity"
+- resources/AndroidManifest.xml (line 342) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerTcfInfoListActivity"
+- resources/AndroidManifest.xml (line 346) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerTcfStringActivity"
+- resources/AndroidManifest.xml (line 350) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerTestLiveNetworkActivity"
+- resources/AndroidManifest.xml (line 354) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerTestModeNetworkActivity"
+- resources/AndroidManifest.xml (line 358) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerUnifiedFlowActivity"
+- resources/AndroidManifest.xml (line 362) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerWaterfallSegmentsActivity"
+- resources/AndroidManifest.xml (line 366) [AppLovin reference]: android:name="com.applovin.mediation.MaxDebuggerAxonEventsListActivity"
+- resources/AndroidManifest.xml (line 369) [AppLovin reference]: android:theme="@style/com.applovin.creative.CreativeDebuggerActivity.Theme"
+- resources/AndroidManifest.xml (line 370) [AppLovin reference]: android:name="com.applovin.creative.MaxCreativeDebuggerActivity"
+- resources/AndroidManifest.xml (line 374) [AppLovin reference]: android:name="com.applovin.creative.MaxCreativeDebuggerDisplayedAdActivity"
+- resources/AndroidManifest.xml (line 377) [AppLovin reference]: android:name="com.applovin.impl.adview.activity.FullscreenAdService"
+- resources/AndroidManifest.xml (line 381) [AppLovin reference]: android:name="com.applovin.impl.adview.activity.AppRestartDuringAdDetectionService"
+- resources/META-INF/com/applovin/mediation/bidmachine-adapter/verification.properties (line 1) [AppLovin reference]: #This is the verification token for the com.applovin.mediation:bidmachine-adapter SDK.
+- resources/META-INF/com/applovin/mediation/inmobi-adapter/verification.properties (line 1) [AppLovin reference]: #This is the verification token for the com.applovin.mediation:inmobi-adapter SDK.
+- resources/META-INF/com.applovin.shadow.okio.kotlin_module (line 1) [AppLovin reference]: com.applovin.shadow.okio
+- resources/META-INF/com.applovin.shadow.okio.kotlin_module (line 1) [AppLovin reference]: !com.applovin.shadow.okio.internal
+- resources/META-INF/okhttp.kotlin_module (line 1) [AppLovin reference]: $com.applovin.shadow.okhttp3.internal
+- resources/META-INF/okhttp.kotlin_module (line 1) [AppLovin reference]: /com.applovin.shadow.okhttp3.internal.concurrent
+- resources/META-INF/okhttp.kotlin_module (line 1) [AppLovin reference]: )com.applovin.shadow.okhttp3.internal.http
+- resources/META-INF/okhttp.kotlin_module (line 1) [AppLovin reference]: 5com.applovin.shadow.okhttp3.internal.platform.android
+- resources/META-INF/okhttp.kotlin_module (line 1) [AppLovin reference]: 'com.applovin.shadow.okhttp3.internal.ws
+- resources/lib/arm64-v8a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_disable
+- resources/lib/arm64-v8a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_enable
+- resources/lib/arm64-v8a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_updateAdInfo
+- resources/lib/arm64-v8a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: libapplovin-native-crash-reporter.so
+- resources/lib/arm64-v8a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: AppLovinSdk
+- resources/lib/armeabi-v7a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_disable
+- resources/lib/armeabi-v7a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_enable
+- resources/lib/armeabi-v7a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_updateAdInfo
+- resources/lib/armeabi-v7a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: libapplovin-native-crash-reporter.so
+- resources/lib/armeabi-v7a/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: AppLovinSdk
+- resources/lib/x86/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_disable
+- resources/lib/x86/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_enable
+- resources/lib/x86/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_updateAdInfo
+- resources/lib/x86/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: libapplovin-native-crash-reporter.so
+- resources/lib/x86/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: AppLovinSdk
+- resources/lib/x86_64/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_disable
+- resources/lib/x86_64/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_enable
+- resources/lib/x86_64/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: Java_com_applovin_impl_sdk_NativeCrashReporter_updateAdInfo
+- resources/lib/x86_64/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: libapplovin-native-crash-reporter.so
+- resources/lib/x86_64/libapplovin-native-crash-reporter.so (line 1) [AppLovin reference]: AppLovinSdk
+- resources/res/drawable/applovin_creative_debugger_report_ad_rounded_button.xml (line 6) [AppLovin reference]: <solid android:color="@color/applovin_sdk_brand_color_dark"/>
+- resources/res/drawable/applovin_creative_debugger_report_ad_rounded_button.xml (line 18) [AppLovin reference]: <solid android:color="@color/applovin_sdk_brand_color"/>
+- resources/res/drawable/applovin_ic_mute_to_unmute.xml (line 2) [AppLovin reference]: <animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_applovin_ic_mute_to_unmute__0_res_0x7f080000">
+- resources/res/drawable/applovin_ic_mute_to_unmute.xml (line 5) [AppLovin reference]: android:animation="@drawable/_applovin_ic_mute_to_unmute__1_res_0x7f080001"/>
+- resources/res/drawable/applovin_ic_mute_to_unmute.xml (line 8) [AppLovin reference]: android:animation="@drawable/_applovin_ic_mute_to_unmute__2_res_0x7f080002"/>
+- resources/res/drawable/applovin_ic_mute_to_unmute.xml (line 11) [AppLovin reference]: android:animation="@drawable/_applovin_ic_mute_to_unmute__3_res_0x7f080003"/>
+- resources/res/drawable/applovin_ic_mute_to_unmute.xml (line 14) [AppLovin reference]: android:animation="@drawable/_applovin_ic_mute_to_unmute__4_res_0x7f080004"/>
+- resources/res/drawable/applovin_ic_privacy_icon_layered_list.xml (line 9) [AppLovin reference]: android:drawable="@drawable/applovin_ic_privacy_icon"
+- resources/res/drawable/applovin_ic_unmute_to_mute.xml (line 2) [AppLovin reference]: <animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_applovin_ic_unmute_to_mute__0_res_0x7f080005">
+- resources/res/drawable/applovin_ic_unmute_to_mute.xml (line 5) [AppLovin reference]: android:animation="@drawable/_applovin_ic_unmute_to_mute__1_res_0x7f080006"/>
+- resources/res/drawable/applovin_ic_unmute_to_mute.xml (line 8) [AppLovin reference]: android:animation="@drawable/_applovin_ic_unmute_to_mute__2_res_0x7f080007"/>
+- resources/res/drawable/applovin_ic_unmute_to_mute.xml (line 11) [AppLovin reference]: android:animation="@drawable/_applovin_ic_unmute_to_mute__3_res_0x7f080008"/>
+- resources/res/drawable/applovin_ic_unmute_to_mute.xml (line 14) [AppLovin reference]: android:animation="@drawable/_applovin_ic_unmute_to_mute__4_res_0x7f080009"/>
+- resources/res/drawable/applovin_mediation_debugger_switch_thumb.xml (line 5) [AppLovin reference]: <solid android:color="@color/applovin_sdk_switchThumbColor"/>
+- resources/res/drawable/applovin_mediation_debugger_switch_thumb.xml (line 11) [AppLovin reference]: android:color="@color/applovin_sdk_switchTrackDisabledColor"/>
+- resources/res/drawable/applovin_mediation_debugger_switch_thumb.xml (line 22) [AppLovin reference]: android:color="@color/applovin_sdk_brand_color"/>
+- resources/res/drawable/applovin_mediation_debugger_switch_track.xml (line 6) [AppLovin reference]: <solid android:color="@color/applovin_sdk_switchTrackDisabledColor"/>
+- resources/res/drawable/applovin_mediation_debugger_switch_track.xml (line 15) [AppLovin reference]: <solid android:color="@color/applovin_sdk_brand_color"/>
+- resources/res/drawable/applovin_rounded_button.xml (line 6) [AppLovin reference]: <solid android:color="@color/applovin_sdk_ctaButtonPressedColor"/>
+- resources/res/drawable/applovin_rounded_button.xml (line 18) [AppLovin reference]: <solid android:color="@color/applovin_sdk_ctaButtonColor"/>
+- resources/res/drawable/applovin_rounded_text_view_border.xml (line 7) [AppLovin reference]: android:color="@color/applovin_sdk_adBadgeTextColor"/>
+- resources/res/layout/applovin_debugger_list_item_detail.xml (line 18) [AppLovin reference]: android:contentDescription="@string/applovin_list_item_image_description"
+- resources/res/layout/applovin_debugger_list_item_detail.xml (line 34) [AppLovin reference]: android:textSize="@dimen/applovin_sdk_mediationDebuggerDetailListItemTextSize"
+- resources/res/layout/creative_debugger_displayed_ad_detail_activity.xml (line 27) [AppLovin reference]: style="@style/com.applovin.creative.debugger.ui.DisplayedAdActivity.ReportAdButton"/>
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 9) [AppLovin reference]: android:id="@+id/applovin_native_icon_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 12) [AppLovin reference]: android:id="@+id/applovin_native_icon_image_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 18) [AppLovin reference]: android:id="@+id/applovin_native_ad_content_linear_layout"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 28) [AppLovin reference]: android:id="@+id/applovin_native_title_text_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 30) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 33) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 35) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.SmallScrollingTitleTextView"/>
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 37) [AppLovin reference]: android:id="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 47) [AppLovin reference]: <TextView style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.ExtraSmallAdBadgeTextView"/>
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 49) [AppLovin reference]: android:id="@+id/applovin_native_advertiser_text_view"
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 50) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.ExtraSmallScrollingBodyTextView"/>
+- resources/res/layout/max_native_ad_banner_icon_and_text_layout.xml (line 53) [AppLovin reference]: android:id="@+id/applovin_native_body_text_view"
+- resources/res/layout/max_native_ad_banner_view.xml (line 7) [AppLovin reference]: android:id="@+id/applovin_native_icon_and_text_layout"
+- resources/res/layout/max_native_ad_banner_view.xml (line 10) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_banner_view.xml (line 11) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_banner_view.xml (line 15) [AppLovin reference]: android:id="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_banner_view.xml (line 21) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.CTAButton"/>
+- resources/res/layout/max_native_ad_leader_view.xml (line 8) [AppLovin reference]: android:id="@+id/applovin_native_leader_icon_and_text_layout"
+- resources/res/layout/max_native_ad_leader_view.xml (line 11) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 13) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 17) [AppLovin reference]: android:id="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 21) [AppLovin reference]: android:id="@+id/applovin_native_icon_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 24) [AppLovin reference]: android:id="@+id/applovin_native_icon_image_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 31) [AppLovin reference]: android:id="@+id/applovin_native_ad_content_linear_layout"
+- resources/res/layout/max_native_ad_leader_view.xml (line 38) [AppLovin reference]: android:id="@+id/applovin_native_title_text_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 42) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.LargeScrollingTitleTextView"/>
+- resources/res/layout/max_native_ad_leader_view.xml (line 48) [AppLovin reference]: <TextView style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.LargeAdBadgeTextView"/>
+- resources/res/layout/max_native_ad_leader_view.xml (line 50) [AppLovin reference]: android:id="@+id/applovin_native_advertiser_text_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 51) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.LargeScrollingBodyTextView"/>
+- resources/res/layout/max_native_ad_leader_view.xml (line 54) [AppLovin reference]: android:id="@+id/applovin_native_body_text_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 61) [AppLovin reference]: android:id="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_leader_view.xml (line 64) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_leader_view.xml (line 65) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_cta_button"/>
+- resources/res/layout/max_native_ad_leader_view.xml (line 68) [AppLovin reference]: android:id="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_leader_view.xml (line 69) [AppLovin reference]: android:background="@color/applovin_sdk_ctaButtonColor"
+- resources/res/layout/max_native_ad_leader_view.xml (line 78) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.CTAButton"/>
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 9) [AppLovin reference]: android:id="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 13) [AppLovin reference]: android:id="@+id/applovin_native_icon_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 16) [AppLovin reference]: android:id="@+id/applovin_native_icon_image_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 26) [AppLovin reference]: android:id="@+id/applovin_native_ad_content_linear_layout"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 31) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 33) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 37) [AppLovin reference]: android:id="@+id/applovin_native_title_text_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 40) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.ExtraSmallScrollingTitleTextView"/>
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 43) [AppLovin reference]: android:id="@+id/applovin_native_advertiser_text_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 46) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.ExtraSmallScrollingBodyTextView"/>
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 49) [AppLovin reference]: android:id="@+id/applovin_native_badge_text_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 54) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.ExtraSmallAdBadgeTextView"/>
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 57) [AppLovin reference]: android:id="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 60) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 61) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_cta_button"/>
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 64) [AppLovin reference]: android:id="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 65) [AppLovin reference]: android:background="@color/applovin_sdk_ctaButtonColor"
+- resources/res/layout/max_native_ad_media_banner_view.xml (line 70) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.CTAButton"/>
+- resources/res/layout/max_native_ad_mrec_view.xml (line 7) [AppLovin reference]: android:id="@+id/applovin_native_icon_and_text_layout"
+- resources/res/layout/max_native_ad_mrec_view.xml (line 16) [AppLovin reference]: android:id="@+id/applovin_native_media_content_view"
+- resources/res/layout/max_native_ad_mrec_view.xml (line 20) [AppLovin reference]: android:layout_above="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_mrec_view.xml (line 21) [AppLovin reference]: android:layout_below="@+id/applovin_native_icon_and_text_layout"/>
+- resources/res/layout/max_native_ad_mrec_view.xml (line 24) [AppLovin reference]: android:id="@+id/applovin_native_cta_button"
+- resources/res/layout/max_native_ad_mrec_view.xml (line 33) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.CTAButton"/>
+- resources/res/layout/max_native_ad_recycler_view_item.xml (line 7) [AppLovin reference]: android:id="@+id/applovin_native_ad_view_container"
+- resources/res/layout/max_native_ad_template_1.xml (line 12) [AppLovin reference]: android:id="@+id/applovin_native_ad_content_linear_layout"
+- resources/res/layout/max_native_ad_template_1.xml (line 16) [AppLovin reference]: android:layout_toLeftOf="@+id/applovin_native_options_view"
+- resources/res/layout/max_native_ad_template_1.xml (line 18) [AppLovin reference]: android:layout_toStartOf="@+id/applovin_native_options_view">
+- resources/res/layout/max_native_ad_template_1.xml (line 20) [AppLovin reference]: android:id="@+id/applovin_native_icon_view"
+- resources/res/layout/max_native_ad_template_1.xml (line 25) [AppLovin reference]: android:id="@+id/applovin_native_icon_image_view"
+- resources/res/layout/max_native_ad_template_1.xml (line 39) [AppLovin reference]: <TextView style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.SmallAdBadgeTextView"/>
+- resources/res/layout/max_native_ad_template_1.xml (line 41) [AppLovin reference]: android:id="@+id/applovin_native_title_text_view"
+- resources/res/layout/max_native_ad_template_1.xml (line 43) [AppLovin reference]: style="@style/com.applovin.mediation.nativeAds.MaxNativeAdView.SmallScrollingTitleTextView"/>
+- resources/res/layout/max_native_ad_template_1.xml (line 46) [AppLovin reference]: android:id="@+id/applovin_native_star_rating_view"
+- resources/res/layout/max_native_ad_template_1.xml (line 51) [AppLovin reference]: android:id="@+id/applovin_native_advertiser_text_view"
+... 11056 additional references omitted
+
+Notes:
+- A candidate is a static string near an SDK-key identifier; validate it in the manifest/resources/code.
+- If the manifest points to @string/... or a BuildConfig field, follow that reference in JADX output.
+- SDK keys embedded in APKs are client identifiers; do not confuse them with private account credentials.
