@@ -55,12 +55,22 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
                 activity = activity,
                 userId = state.userId!!,
                 onMessage = vm::setMessage,
-                onRewarded = vm::onRewarded
+                onRewarded = vm::onRewarded,
+                onAdLoadedCallback = vm::onMaxAdLoaded,
+                onAdHiddenCallback = vm::onMaxAdHidden,
+                onAdDisplayedCallback = vm::onMaxAdDisplayed
             )
         } else null
     }
     LaunchedEffect(controller) {
         controller?.initializeAndLoad()
+    }
+    LaunchedEffect(state.autoShowNext) {
+        if (state.autoShowNext) {
+            vm.consumeAutoShowRequest()
+            val shown = controller?.show() == true
+            if (!shown) vm.setMessage("Следующий ролик пока не готов. Автоматический цикл приостановлен.")
+        }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -162,49 +172,35 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Начисление только после onUserRewarded и подтверждения роста баланса на сервере. " +
-                        "Автопоказ отключён — каждое следующее видео требует вашего согласия.",
+                    "Следующий ролик запускается автоматически после штатного закрытия текущей рекламы " +
+                        "и подтверждения награды сервером. Первый запуск требует нажатия; остановить цикл можно кнопкой «Стоп».",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.LightGray
                 )
 
                 if (state.infiniteMode) {
                     Text(
-                        "Бесконечный просмотр · завершено: ${state.videosCompleted}",
+                        "Бесконечный просмотр · подтверждено: ${state.videosCompleted}",
                         color = Color(0xFF8BDAA8)
                     )
                 }
 
-                // Primary watch button (single ad, or first ad in infinite mode).
-                Button(
-                    onClick = {
-                        // In infinite mode while waiting for next confirmation, use the dedicated button.
-                        if (state.infiniteMode && state.awaitNextConfirm) return@Button
-                        onWatchAd()
-                    },
-                    enabled = !state.checkingReward &&
-                        !state.rewardInFlight &&
-                        !state.userId.isNullOrBlank() &&
-                        !(state.infiniteMode && state.awaitNextConfirm),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        when {
-                            state.infiniteMode && state.videosCompleted == 0 -> "Смотреть первое видео"
-                            else -> "Смотреть рекламу"
-                        }
-                    )
-                }
-
-                // Explicit consent for the next video in infinite mode.
-                if (state.infiniteMode && state.awaitNextConfirm && !state.checkingReward) {
+                // The first impression is explicitly started by the user. Later impressions
+                // require MAX hidden + server-confirmed reward + a preloaded next ad.
+                if (!state.infiniteMode || state.videosCompleted == 0) {
                     Button(
-                        onClick = {
-                            if (vm.confirmNextVideo()) onWatchAd()
-                        },
-                        enabled = !state.rewardInFlight,
+                        onClick = onWatchAd,
+                        enabled = !state.checkingReward && !state.rewardInFlight && !state.userId.isNullOrBlank(),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Следующее видео") }
+                    ) {
+                        Text(if (state.infiniteMode) "Смотреть первое видео" else "Смотреть рекламу")
+                    }
+                } else {
+                    Text(
+                        if (state.checkingReward || state.rewardInFlight) "Проверяем начисление…"
+                        else "Автоматический цикл активен",
+                        color = Color(0xFF8BDAA8)
+                    )
                 }
 
                 Row(
