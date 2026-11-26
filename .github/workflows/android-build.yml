@@ -39,24 +39,22 @@ jobs:
           APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
         run: gradle --no-daemon --stacktrace assembleDebug
 
-      - name: Collect APK files
+      - name: Collect APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          mapfile -t apks < <(find android/app/build/outputs/apk/debug -type f -name '*.apk' -not -path '*/androidTest/*' | sort)
-          if (( ${#apks[@]} == 0 )); then
+          apk="$(find android/app/build/outputs/apk/debug -type f -name '*.apk' -not -path '*/androidTest/*' | sort | head -n 1)"
+          if [[ -z "$apk" ]]; then
             echo "::error::Gradle completed but no debug APK was found."
             exit 1
           fi
-          for apk in "${apks[@]}"; do
-            cp "$apk" "dist/$(basename "$apk")"
-          done
+          cp "$apk" dist/AdReverse-debug.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: AdCoin-debug-apk
-          path: dist/*.apk
+          name: AdReverse-debug-apk
+          path: dist/AdReverse-debug.apk
           if-no-files-found: error
           retention-days: 14
