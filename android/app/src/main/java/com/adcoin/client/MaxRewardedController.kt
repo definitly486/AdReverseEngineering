@@ -99,15 +99,8 @@ class MaxRewardedController(
         logEvent("onAdDisplayed", ad)
     }
 
-    override fun onRewardedVideoStarted(ad: MaxAd) {
-        logEvent("onRewardedVideoStarted", ad)
-    }
-
-    override fun onRewardedVideoCompleted(ad: MaxAd) {
-        // Video completion is not the same as the ad being dismissed.
-        logEvent("onRewardedVideoCompleted", ad)
-        onMessage("Видео завершено. Ожидаем штатного закрытия MAX (onAdHidden)…")
-    }
+    // MAX SDK 13.x does not expose separate rewarded-video started/completed callbacks.
+    // Track the supported lifecycle through onAdDisplayed(), onUserRewarded(), and onAdHidden().
 
     override fun onAdHidden(ad: MaxAd) {
         logEvent("onAdHidden", ad)
