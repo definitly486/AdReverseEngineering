@@ -65,8 +65,8 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
     LaunchedEffect(controller) {
         controller?.initializeAndLoad()
     }
-    LaunchedEffect(state.autoShowNext) {
-        if (state.autoShowNext) {
+    LaunchedEffect(state.autoShowNext, state.infiniteMode) {
+        if (state.autoShowNext && state.infiniteMode) {
             vm.consumeAutoShowRequest()
             val shown = controller?.show() == true
             if (!shown) vm.setMessage("Следующий ролик пока не готов. Автоматический цикл приостановлен.")
