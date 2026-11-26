@@ -24,7 +24,6 @@ data class ClientState(
     val checkingReward: Boolean = false,
     // Infinite view mode
     val infiniteMode: Boolean = false,
-    val awaitNextConfirm: Boolean = false,
     val videosCompleted: Int = 0,
     val rewardInFlight: Boolean = false,
     val adReady: Boolean = false,
@@ -124,9 +123,11 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         }
         _state.value = _state.value.copy(
             infiniteMode = true,
-            awaitNextConfirm = false,
             videosCompleted = 0,
-            message = "Бесконечный просмотр включён. Нажмите «Смотреть», чтобы начать первое видео."
+            autoShowNext = false,
+            adHidden = false,
+            rewardVerifiedForAd = false,
+            message = "Бесконечный просмотр включён. Нажмите «Смотреть первое видео», чтобы начать."
         )
     }
 
@@ -134,26 +135,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     fun stopInfiniteMode() {
         _state.value = _state.value.copy(
             infiniteMode = false,
-            awaitNextConfirm = false,
+            autoShowNext = false,
             message = "Бесконечный просмотр остановлен."
         )
     }
-
-    /**
-     * User confirmed the next video in infinite mode.
-     * Actual show is performed by the Activity via controller.show().
-     * Returns true if the UI should call show().
-     */
-    fun confirmNextVideo(): Boolean {
-        val s = _state.value
-        if (!s.infiniteMode || s.rewardInFlight || s.checkingReward) return false
-        // First video uses the primary "Watch" button (videosCompleted == 0, awaitNextConfirm == false).
-        // Subsequent videos require awaitNextConfirm.
-        if (s.videosCompleted > 0 && !s.awaitNextConfirm) return false
-        _state.value = s.copy(awaitNextConfirm = false, message = null)
-        return true
-    }
-
 
     /** MAX lifecycle callbacks coordinate the next impression. */
     fun onMaxAdLoaded() {
@@ -229,7 +214,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 rewardInFlight = false,
                 videosCompleted = completed,
                 rewardVerifiedForAd = credited,
-                awaitNextConfirm = false,
                 message = when {
                     credited && wasInfinite ->
                         "Сервер подтвердил начисление (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
