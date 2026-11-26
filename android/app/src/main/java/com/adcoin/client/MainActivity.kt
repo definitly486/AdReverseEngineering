@@ -145,6 +145,7 @@ private fun LoginScreen(state: ClientState, vm: AdCoinViewModel) {
 
 @Composable
 private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: () -> Unit) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
