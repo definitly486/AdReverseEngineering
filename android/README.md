@@ -39,10 +39,10 @@ Use the same keystore and alias for every build to preserve the APK signing iden
 
 ## Current integration boundary
 
-Email-code login uses the confirmed `/login/sendCode` and `/login/validateCode` routes. Wallet refresh reads `POST /adcoin/updateData` and `GET /withdrawal/methods/get/{token}`.
+Email-code login uses the confirmed `/login/sendCode` and `/login/validateCode` routes. Account data is read from `POST /adcoin/getUserData`, wallet state from `POST /adcoin/updateData`, and the withdrawal balance from `GET /withdrawal/methods/get/{token}`.
 
 The reverse-engineering reports did not establish an AdCoin client-side reward-credit endpoint. The app therefore does not fabricate a claim request or locally increase the balance. After MAX's reward callback it polls the official wallet read endpoints and reports success only when the server balance increases.
 
-MAX's server-to-server callback configuration is managed in the publisher's MAX dashboard and is not part of this client. The app sets MAX's user identifier to the AdCoin account ID when that ID is returned by the profile API. If the profile response does not expose a usable ID, rewarded ads remain disabled rather than sending an access token as the user ID.
+MAX's server-to-server callback configuration is managed in the publisher's MAX dashboard and is not part of this client. The app sets MAX's user identifier to the AdCoin account ID when that ID is returned by the account API. If the profile response does not expose a usable ID, rewarded ads remain disabled rather than sending an access token as the user ID.
 
 This is an initial implementation. Verify the API response schema and the publisher's MAX ad-unit configuration with a test account before production use.

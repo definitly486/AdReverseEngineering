@@ -1,11 +1,15 @@
 package com.adcoin.client
 
+import android.os.Build
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
+import java.util.Currency
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 data class WalletSnapshot(
@@ -86,6 +90,29 @@ class AdCoinApi(private val store: SecureSessionStore) {
 
     suspend fun wallet(): WalletSnapshot = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val token = store.token() ?: throw IOException("Сессия завершена. Войдите снова.")
+        val locale = Locale.getDefault()
+        val currencyCode = runCatching { Currency.getInstance(locale).currencyCode }.getOrDefault("USD")
+
+        // This endpoint returns the account profile and is the best source for the internal AdCoin user ID.
+        val userData = try {
+            request(
+                "$base/adcoin/getUserData",
+                "POST",
+                JSONObject()
+                    .put("accessToken", token)
+                    .put("versionName", "2.0.0")
+                    .put("versionCode", 1)
+                    .put("androidSDK", Build.VERSION.SDK_INT)
+                    .put("lang", locale.language.ifBlank { "en" })
+                    .put("country", locale.country)
+                    .put("messagingToken", JSONObject.NULL)
+                    .put("simCountryIso", JSONObject.NULL)
+                    .put("currencyCode", currencyCode)
+            )
+        } catch (_: Exception) {
+            JSONObject()
+        }
+
         val update = request(
             "$base/adcoin/updateData",
             "POST",
@@ -95,23 +122,25 @@ class AdCoinApi(private val store: SecureSessionStore) {
                 .put("advertisingId", store.advertisingId())
                 .put("messagingToken", JSONObject.NULL)
         )
+        val encodedToken = URLEncoder.encode(token, "UTF-8")
         val withdrawal = try {
-            request("$base/withdrawal/methods/get/${java.net.URLEncoder.encode(token, "UTF-8")}", "GET")
+            request("$base/withdrawal/methods/get/$encodedToken", "GET")
         } catch (_: Exception) {
             JSONObject()
         }
         val stats = try {
-            request("$base/user/ownProfile/fullStats/get/${java.net.URLEncoder.encode(token, "UTF-8")}", "GET")
+            request("$base/user/ownProfile/fullStats/get/$encodedToken", "GET")
         } catch (_: Exception) {
             JSONObject()
         }
 
-        val userId = findUserId(stats) ?: findUserId(update) ?: findUserId(withdrawal)
-        val cash = if (update.has("cash") && !update.isNull("cash")) {
-            update.optDouble("cash")
-        } else if (withdrawal.has("balance") && !withdrawal.isNull("balance")) {
-            withdrawal.optDouble("balance")
-        } else null
+        val userId = findUserId(userData) ?: findUserId(stats) ?: findUserId(update) ?: findUserId(withdrawal)
+        val cash = when {
+            update.has("cash") && !update.isNull("cash") -> update.optDouble("cash")
+            userData.has("balance") && !userData.isNull("balance") -> userData.optDouble("balance")
+            withdrawal.has("balance") && !withdrawal.isNull("balance") -> withdrawal.optDouble("balance")
+            else -> null
+        }
 
         WalletSnapshot(
             balance = cash,
@@ -124,20 +153,29 @@ class AdCoinApi(private val store: SecureSessionStore) {
     }
 
     private fun findUserId(root: JSONObject): String? {
+        fun asId(value: Any?): String? = when (value) {
+            is String -> value.takeIf { it.isNotBlank() }
+            is Number -> value.toLong().takeIf { it > 0 }?.toString()
+            else -> null
+        }
+
+        asId(root.opt("userId"))?.let { return it }
+        asId(root.opt("user_id"))?.let { return it }
+        asId(root.opt("uid"))?.let { return it }
+        asId(root.opt("id"))?.let { return it }
+
         val preferred = listOf("userId", "user_id", "uid", "accountId", "account_id")
         fun walk(value: Any?, depth: Int): String? {
             if (depth > 5 || value == null || value == JSONObject.NULL) return null
             if (value is JSONObject) {
                 for (key in preferred) {
-                    val candidate = value.opt(key)
-                    if (candidate is String && candidate.isNotBlank()) return candidate
-                    if (candidate is Number) return candidate.toLong().toString()
+                    asId(value.opt(key))?.let { return it }
                 }
-                val user = value.optJSONObject("user")
-                if (user != null) {
-                    val id = user.opt("id")
-                    if (id is String && id.isNotBlank()) return id
-                    if (id is Number) return id.toLong().toString()
+                for (container in listOf("user", "profile", "account")) {
+                    val nested = value.optJSONObject(container)
+                    if (nested != null) {
+                        asId(nested.opt("id"))?.let { return it }
+                    }
                 }
                 val keys = value.keys()
                 while (keys.hasNext()) {
