@@ -58,12 +58,13 @@ class AdAutoCloser(
         stop()
         lastViewClickAt = 0L
         adPackageName = adActivity?.packageName
-        prefs.edit()
-            .putBoolean(KEY_ACTIVE, true)
-            .putLong(KEY_LAST_CLICK, 0L)
-            .putString(KEY_AD_PACKAGE, adPackageName)
-            .putString(KEY_LAST_RESULT, "watching")
-            .apply()
+       prefs.edit()
+    .putBoolean(KEY_ACTIVE, true)
+    .putLong("armed_at", android.os.SystemClock.elapsedRealtime())  // ← добавить эту строку
+    .putLong(KEY_LAST_CLICK, 0L)
+    .putString(KEY_AD_PACKAGE, adPackageName)
+    .putString(KEY_LAST_RESULT, "watching")
+    .apply()
         val startedAt = System.currentTimeMillis()
         onLog("реклама открыта; жду появления X.")
         Log.i(TAG, "watching for close control")
