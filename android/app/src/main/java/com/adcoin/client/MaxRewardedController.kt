@@ -1,6 +1,7 @@
 package com.adcoin.client
 
 import android.app.Activity
+import android.util.Log
 import com.applovin.mediation.MaxAd
 import com.applovin.mediation.MaxError
 import com.applovin.mediation.MaxReward
@@ -17,6 +18,15 @@ class MaxRewardedController(
     private val onMessage: (String) -> Unit,
     private val onRewarded: () -> Unit
 ) : MaxRewardedAdListener {
+    private val logTag = "AdCoin.MAX"
+
+    private fun logEvent(event: String, ad: MaxAd? = null, details: String = "") {
+        val metadata = ad?.let {
+            " network=${it.networkName}, adUnit=${it.adUnitId}, placement=${it.placement}"
+        }.orEmpty()
+        Log.i(logTag, "$event$metadata $details")
+    }
+
     private var rewardedAd: MaxRewardedAd? = null
     private var initialized = false
 
@@ -76,23 +86,41 @@ class MaxRewardedController(
     }
 
     override fun onAdLoaded(ad: MaxAd) {
+        logEvent("onAdLoaded", ad)
         onMessage("Реклама готова к показу.")
     }
 
     override fun onAdLoadFailed(adUnitId: String, error: MaxError) {
+        logEvent("onAdLoadFailed", details = "adUnit=$adUnitId code=${error.code} message=${error.message}")
         onMessage("Не удалось загрузить рекламу (код ${error.code}).")
     }
 
-    override fun onAdDisplayed(ad: MaxAd) {}
+    override fun onAdDisplayed(ad: MaxAd) {
+        logEvent("onAdDisplayed", ad)
+    }
+
+    override fun onRewardedVideoStarted(ad: MaxAd) {
+        logEvent("onRewardedVideoStarted", ad)
+    }
+
+    override fun onRewardedVideoCompleted(ad: MaxAd) {
+        // Video completion is not the same as the ad being dismissed.
+        logEvent("onRewardedVideoCompleted", ad)
+        onMessage("Видео завершено. Ожидаем штатного закрытия MAX (onAdHidden)…")
+    }
 
     override fun onAdHidden(ad: MaxAd) {
-        // Preload next creative without showing it.
+        logEvent("onAdHidden", ad)
+        // Preload next creative only after MAX reports that the ad is hidden.
         rewardedAd?.loadAd()
     }
 
-    override fun onAdClicked(ad: MaxAd) {}
+    override fun onAdClicked(ad: MaxAd) {
+        logEvent("onAdClicked", ad)
+    }
 
     override fun onAdDisplayFailed(ad: MaxAd, error: MaxError) {
+        logEvent("onAdDisplayFailed", ad, "code=${error.code} message=${error.message}")
         onMessage("Не удалось показать рекламу (код ${error.code}).")
         rewardedAd?.loadAd()
     }
@@ -103,6 +131,7 @@ class MaxRewardedController(
             onMessage("Повторный onUserRewarded проигнорирован (уже обработан).")
             return
         }
+        logEvent("onUserRewarded", ad, "amount=${reward.amount} label=${reward.label}")
         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
         onRewarded()
     }
