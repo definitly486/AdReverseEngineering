@@ -1,0 +1,13 @@
+package io.appmetrica.analytics.impl;
+
+import android.os.Process;
+
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public final class Ua implements Vk {
+    @Override // io.appmetrica.analytics.impl.Vk
+    public final boolean a(Ra ra) {
+        Integer num = ra.e;
+        return num == null || num.intValue() != Process.myPid();
+    }
+}

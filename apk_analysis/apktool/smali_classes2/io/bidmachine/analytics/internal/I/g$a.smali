@@ -1,0 +1,116 @@
+.class final Lio/bidmachine/analytics/internal/I/g$a;
+.super Lmy5;
+.source "r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32"
+
+# interfaces
+.implements Luf4;
+
+
+# annotations
+.annotation system Ldalvik/annotation/EnclosingClass;
+    value = Lio/bidmachine/analytics/internal/I/g;
+.end annotation
+
+.annotation system Ldalvik/annotation/InnerClass;
+    accessFlags = 0x18
+    name = null
+.end annotation
+
+
+# static fields
+.field public static final a:Lio/bidmachine/analytics/internal/I/g$a;
+
+
+# direct methods
+.method static constructor <clinit>()V
+    .locals 1
+
+    .line 1
+    new-instance v0, Lio/bidmachine/analytics/internal/I/g$a;
+
+    .line 2
+    .line 3
+    invoke-direct {v0}, Lio/bidmachine/analytics/internal/I/g$a;-><init>()V
+
+    .line 4
+    .line 5
+    .line 6
+    sput-object v0, Lio/bidmachine/analytics/internal/I/g$a;->a:Lio/bidmachine/analytics/internal/I/g$a;
+
+    .line 7
+    .line 8
+    return-void
+.end method
+
+.method public constructor <init>()V
+    .locals 1
+
+    .line 1
+    const/4 v0, 0x0
+
+    .line 2
+    invoke-direct {p0, v0}, Lmy5;-><init>(I)V
+
+    .line 3
+    .line 4
+    .line 5
+    return-void
+.end method
+
+
+# virtual methods
+.method public final a()Ljava/text/SimpleDateFormat;
+    .locals 2
+
+    .line 1
+    new-instance p0, Ljava/text/SimpleDateFormat;
+
+    .line 2
+    .line 3
+    sget-object v0, Ljava/util/Locale;->ROOT:Ljava/util/Locale;
+
+    .line 4
+    .line 5
+    const-string v1, "yyyy-MM-dd HH:mm:ss"
+
+    .line 6
+    .line 7
+    invoke-direct {p0, v1, v0}, Ljava/text/SimpleDateFormat;-><init>(Ljava/lang/String;Ljava/util/Locale;)V
+
+    .line 8
+    .line 9
+    .line 10
+    const-string v0, "UTC"
+
+    .line 11
+    .line 12
+    invoke-static {v0}, Ljava/util/TimeZone;->getTimeZone(Ljava/lang/String;)Ljava/util/TimeZone;
+
+    .line 13
+    .line 14
+    .line 15
+    move-result-object v0
+
+    .line 16
+    invoke-virtual {p0, v0}, Ljava/text/DateFormat;->setTimeZone(Ljava/util/TimeZone;)V
+
+    .line 17
+    .line 18
+    .line 19
+    return-object p0
+.end method
+
+.method public bridge synthetic invoke()Ljava/lang/Object;
+    .locals 0
+
+    .line 1
+    invoke-virtual {p0}, Lio/bidmachine/analytics/internal/I/g$a;->a()Ljava/text/SimpleDateFormat;
+
+    .line 2
+    .line 3
+    .line 4
+    move-result-object p0
+
+    .line 5
+    return-object p0
+.end method

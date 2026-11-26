@@ -1,0 +1,17 @@
+package com.iab.omid.library.appodeal.publisher;
+
+import android.webkit.WebView;
+
+/* JADX INFO: loaded from: classes2.dex */
+public class a extends AdSessionStatePublisher {
+    public a(String str, WebView webView) {
+        super(str);
+        if (webView != null) {
+            com.iab.omid.library.appodeal.webviewclient.a.a(webView);
+            if (!webView.getSettings().getJavaScriptEnabled()) {
+                webView.getSettings().setJavaScriptEnabled(true);
+            }
+        }
+        a(webView);
+    }
+}

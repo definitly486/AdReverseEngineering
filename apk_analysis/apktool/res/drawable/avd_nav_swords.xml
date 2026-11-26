@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector android:drawable="@drawable/$avd_nav_swords__0"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt">
+    <target android:name="swordA" android:animation="@drawable/$avd_nav_swords__1" />
+    <target android:name="swordB" android:animation="@drawable/$avd_nav_swords__2" />
+    <target android:name="all" android:animation="@drawable/$avd_nav_swords__3" />
+    <target android:name="outlinedA" android:animation="@drawable/$avd_nav_swords__4" />
+    <target android:name="filledA" android:animation="@drawable/$avd_nav_swords__5" />
+    <target android:name="outlinedB" android:animation="@drawable/$avd_nav_swords__6" />
+    <target android:name="filledB" android:animation="@drawable/$avd_nav_swords__7" />
+    <target android:name="s1" android:animation="@drawable/$avd_nav_swords__8" />
+    <target android:name="s2" android:animation="@drawable/$avd_nav_swords__9" />
+    <target android:name="s3" android:animation="@drawable/$avd_nav_swords__10" />
+</animated-vector>

@@ -1,0 +1,26 @@
+package io.appmetrica.analytics.impl;
+
+import android.content.res.Configuration;
+import android.os.LocaleList;
+import java.util.ArrayList;
+import java.util.Locale;
+
+/* JADX INFO: renamed from: io.appmetrica.analytics.impl.sb, reason: case insensitive filesystem */
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public abstract class AbstractC0615sb {
+    public static final ArrayList a(Configuration configuration) {
+        ArrayList arrayList = new ArrayList();
+        LocaleList locales = configuration.getLocales();
+        if (locales != null) {
+            int size = locales.size();
+            for (int i = 0; i < size; i++) {
+                Locale locale = locales.get(i);
+                if (locale != null) {
+                    arrayList.add(AbstractC0415ke.a(locale));
+                }
+            }
+        }
+        return arrayList;
+    }
+}

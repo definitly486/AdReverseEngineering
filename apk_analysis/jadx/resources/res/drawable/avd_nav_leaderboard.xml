@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_avd_nav_leaderboard__0_res_0x7f080037">
+    <target
+        android:name="outlined"
+        android:animation="@drawable/_avd_nav_leaderboard__1_res_0x7f080038"/>
+    <target
+        android:name="bar0"
+        android:animation="@drawable/_avd_nav_leaderboard__2_res_0x7f080039"/>
+    <target
+        android:name="bar1"
+        android:animation="@drawable/_avd_nav_leaderboard__3_res_0x7f08003a"/>
+    <target
+        android:name="bar2"
+        android:animation="@drawable/_avd_nav_leaderboard__4_res_0x7f08003b"/>
+    <target
+        android:name="spark"
+        android:animation="@drawable/_avd_nav_leaderboard__5_res_0x7f08003c"/>
+</animated-vector>

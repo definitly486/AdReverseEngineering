@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<set xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt">
+    <objectAnimator
+        android:interpolator="@android:interpolator/fast_out_slow_in"
+        android:duration="950"
+        android:startOffset="0">
+        <propertyValuesHolder
+            android:valueType="floatType"
+            android:propertyName="translateX">
+            <keyframe
+                android:value="0"
+                android:valueType="floatType"
+                android:fraction="0"/>
+            <keyframe
+                android:value="-150"
+                android:valueType="floatType"
+                android:fraction="0.16"/>
+            <keyframe
+                android:value="-150"
+                android:valueType="floatType"
+                android:fraction="0.5"/>
+            <keyframe
+                android:value="30"
+                android:valueType="floatType"
+                android:fraction="0.7"/>
+            <keyframe
+                android:value="-8"
+                android:valueType="floatType"
+                android:fraction="0.85"/>
+            <keyframe
+                android:value="0"
+                android:valueType="floatType"
+                android:fraction="1"/>
+        </propertyValuesHolder>
+    </objectAnimator>
+</set>

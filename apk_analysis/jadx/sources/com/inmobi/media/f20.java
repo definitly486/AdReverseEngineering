@@ -1,0 +1,28 @@
+package com.inmobi.media;
+
+import defpackage.ka7;
+
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public final class f20 extends gm0 {
+    public final int a;
+
+    public f20(int i) {
+        this.a = i;
+    }
+
+    public final boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        return (obj instanceof f20) && this.a == ((f20) obj).a;
+    }
+
+    public final int hashCode() {
+        return Integer.hashCode(this.a);
+    }
+
+    public final String toString() {
+        return ka7.i(this.a, "PollingVisibilityTrackerConfig(pollingIntervalInMillis=", ")");
+    }
+}

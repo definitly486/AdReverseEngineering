@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_avd_nav_season__0_res_0x7f080042">
+    <target
+        android:name="star"
+        android:animation="@drawable/_avd_nav_season__1_res_0x7f080043"/>
+    <target
+        android:name="trail"
+        android:animation="@drawable/_avd_nav_season__2_res_0x7f080044"/>
+    <target
+        android:name="trailPath"
+        android:animation="@drawable/_avd_nav_season__3_res_0x7f080045"/>
+    <target
+        android:name="outlined"
+        android:animation="@drawable/_avd_nav_season__4_res_0x7f080046"/>
+    <target
+        android:name="filled"
+        android:animation="@drawable/_avd_nav_season__5_res_0x7f080047"/>
+</animated-vector>

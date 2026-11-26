@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_avd_nav_contests__0_res_0x7f080021">
+    <target
+        android:name="cup"
+        android:animation="@drawable/_avd_nav_contests__1_res_0x7f080022"/>
+    <target
+        android:name="outlined"
+        android:animation="@drawable/_avd_nav_contests__2_res_0x7f080023"/>
+    <target
+        android:name="filled"
+        android:animation="@drawable/_avd_nav_contests__3_res_0x7f080024"/>
+    <target
+        android:name="c1"
+        android:animation="@drawable/_avd_nav_contests__4_res_0x7f080025"/>
+    <target
+        android:name="c2"
+        android:animation="@drawable/_avd_nav_contests__5_res_0x7f080026"/>
+    <target
+        android:name="c3"
+        android:animation="@drawable/_avd_nav_contests__6_res_0x7f080027"/>
+    <target
+        android:name="c4"
+        android:animation="@drawable/_avd_nav_contests__7_res_0x7f080028"/>
+    <target
+        android:name="c5"
+        android:animation="@drawable/_avd_nav_contests__8_res_0x7f080029"/>
+    <target
+        android:name="c6"
+        android:animation="@drawable/_avd_nav_contests__9_res_0x7f08002a"/>
+</animated-vector>

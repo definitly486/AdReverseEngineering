@@ -1,0 +1,20 @@
+package io.appmetrica.analytics.impl;
+
+/* JADX INFO: renamed from: io.appmetrica.analytics.impl.uj, reason: case insensitive filesystem */
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public final class C0673uj implements InterfaceC0664ua {
+    public final /* synthetic */ Kj a;
+
+    public C0673uj(Kj kj) {
+        this.a = kj;
+    }
+
+    @Override // io.appmetrica.analytics.impl.InterfaceC0664ua
+    public final void a(InterfaceC0689va interfaceC0689va) {
+        Jj jjA = ((Kc) this.a).a();
+        if (jjA != null) {
+            interfaceC0689va.reportEvent(jjA.a, jjA.b);
+        }
+    }
+}

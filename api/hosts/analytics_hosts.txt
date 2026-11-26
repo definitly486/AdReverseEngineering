@@ -1,0 +1,3 @@
+firebase-settings.crashlytics.com
+firebase.google.com
+firebaseinstallations.googleapis.com

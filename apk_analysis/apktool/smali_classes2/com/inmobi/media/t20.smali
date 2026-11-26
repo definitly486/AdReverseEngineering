@@ -1,0 +1,17 @@
+.class public final Lcom/inmobi/media/t20;
+.super Lcom/inmobi/media/e1;
+.source "r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32"
+
+
+# direct methods
+.method public constructor <init>(Lcom/inmobi/ads/InMobiAdRequestStatus;Lcom/inmobi/media/x80;)V
+    .locals 0
+
+    .line 1
+    invoke-direct {p0, p1, p2}, Lcom/inmobi/media/e1;-><init>(Lcom/inmobi/ads/InMobiAdRequestStatus;Lcom/inmobi/media/b1;)V
+
+    .line 2
+    .line 3
+    .line 4
+    return-void
+.end method

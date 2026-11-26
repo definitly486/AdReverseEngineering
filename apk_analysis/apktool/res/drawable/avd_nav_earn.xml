@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector android:drawable="@drawable/$avd_nav_earn__0"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt">
+    <target android:name="gem" android:animation="@drawable/$avd_nav_earn__1" />
+    <target android:name="outlined" android:animation="@drawable/$avd_nav_earn__2" />
+    <target android:name="filled" android:animation="@drawable/$avd_nav_earn__3" />
+    <target android:name="spark1" android:animation="@drawable/$avd_nav_earn__4" />
+    <target android:name="spark2" android:animation="@drawable/$avd_nav_earn__5" />
+    <target android:name="spark3" android:animation="@drawable/$avd_nav_earn__6" />
+    <target android:name="spark4" android:animation="@drawable/$avd_nav_earn__7" />
+</animated-vector>

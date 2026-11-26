@@ -1,0 +1,18 @@
+package defpackage;
+
+import android.R;
+
+/* JADX INFO: loaded from: classes.dex */
+public abstract class hu8 {
+    public static final int[] a = {R.attr.summaryOn, R.attr.summaryOff, R.attr.disableDependentsState, com.pavloffmedev.dcn.R.attr.disableDependentsState, com.pavloffmedev.dcn.R.attr.summaryOff, com.pavloffmedev.dcn.R.attr.summaryOn};
+    public static final int[] b = {R.attr.dialogTitle, R.attr.dialogMessage, R.attr.dialogIcon, R.attr.positiveButtonText, R.attr.negativeButtonText, R.attr.dialogLayout, com.pavloffmedev.dcn.R.attr.dialogIcon, com.pavloffmedev.dcn.R.attr.dialogLayout, com.pavloffmedev.dcn.R.attr.dialogMessage, com.pavloffmedev.dcn.R.attr.dialogTitle, com.pavloffmedev.dcn.R.attr.negativeButtonText, com.pavloffmedev.dcn.R.attr.positiveButtonText};
+    public static final int[] c = {com.pavloffmedev.dcn.R.attr.useSimpleSummaryProvider};
+    public static final int[] d = {R.attr.entries, R.attr.entryValues, com.pavloffmedev.dcn.R.attr.entries, com.pavloffmedev.dcn.R.attr.entryValues, com.pavloffmedev.dcn.R.attr.useSimpleSummaryProvider};
+    public static final int[] e = {R.attr.entries, R.attr.entryValues, com.pavloffmedev.dcn.R.attr.entries, com.pavloffmedev.dcn.R.attr.entryValues};
+    public static final int[] f = {R.attr.icon, R.attr.persistent, R.attr.enabled, R.attr.layout, R.attr.title, R.attr.selectable, R.attr.key, R.attr.summary, R.attr.order, R.attr.widgetLayout, R.attr.dependency, R.attr.defaultValue, R.attr.shouldDisableView, R.attr.fragment, R.attr.singleLineTitle, R.attr.iconSpaceReserved, com.pavloffmedev.dcn.R.attr.allowDividerAbove, com.pavloffmedev.dcn.R.attr.allowDividerBelow, com.pavloffmedev.dcn.R.attr.defaultValue, com.pavloffmedev.dcn.R.attr.dependency, com.pavloffmedev.dcn.R.attr.enableCopying, com.pavloffmedev.dcn.R.attr.enabled, com.pavloffmedev.dcn.R.attr.fragment, com.pavloffmedev.dcn.R.attr.icon, com.pavloffmedev.dcn.R.attr.iconSpaceReserved, com.pavloffmedev.dcn.R.attr.isPreferenceVisible, com.pavloffmedev.dcn.R.attr.key, com.pavloffmedev.dcn.R.attr.layout, com.pavloffmedev.dcn.R.attr.order, com.pavloffmedev.dcn.R.attr.persistent, com.pavloffmedev.dcn.R.attr.selectable, com.pavloffmedev.dcn.R.attr.shouldDisableView, com.pavloffmedev.dcn.R.attr.singleLineTitle, com.pavloffmedev.dcn.R.attr.summary, com.pavloffmedev.dcn.R.attr.title, com.pavloffmedev.dcn.R.attr.widgetLayout};
+    public static final int[] g = {R.attr.orderingFromXml, com.pavloffmedev.dcn.R.attr.initialExpandedChildrenCount, com.pavloffmedev.dcn.R.attr.orderingFromXml};
+    public static final int[] h = {R.attr.maxWidth, R.attr.maxHeight, com.pavloffmedev.dcn.R.attr.maxHeight, com.pavloffmedev.dcn.R.attr.maxWidth};
+    public static final int[] i = {R.attr.layout, R.attr.max, com.pavloffmedev.dcn.R.attr.adjustable, com.pavloffmedev.dcn.R.attr.min, com.pavloffmedev.dcn.R.attr.seekBarIncrement, com.pavloffmedev.dcn.R.attr.showSeekBarValue, com.pavloffmedev.dcn.R.attr.updatesContinuously};
+    public static final int[] j = {R.attr.summaryOn, R.attr.summaryOff, R.attr.disableDependentsState, R.attr.switchTextOn, R.attr.switchTextOff, com.pavloffmedev.dcn.R.attr.disableDependentsState, com.pavloffmedev.dcn.R.attr.summaryOff, com.pavloffmedev.dcn.R.attr.summaryOn, com.pavloffmedev.dcn.R.attr.switchTextOff, com.pavloffmedev.dcn.R.attr.switchTextOn};
+    public static final int[] k = {R.attr.summaryOn, R.attr.summaryOff, R.attr.disableDependentsState, R.attr.switchTextOn, R.attr.switchTextOff, com.pavloffmedev.dcn.R.attr.disableDependentsState, com.pavloffmedev.dcn.R.attr.summaryOff, com.pavloffmedev.dcn.R.attr.summaryOn, com.pavloffmedev.dcn.R.attr.switchTextOff, com.pavloffmedev.dcn.R.attr.switchTextOn};
+}

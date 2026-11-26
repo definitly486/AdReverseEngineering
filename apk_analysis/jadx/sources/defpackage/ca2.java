@@ -1,0 +1,39 @@
+package defpackage;
+
+import android.content.Context;
+import android.content.res.TypedArray;
+import android.content.res.XmlResourceParser;
+import android.util.Xml;
+import java.util.ArrayList;
+
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes.dex */
+public final class ca2 {
+    public final int a;
+    public final ArrayList b = new ArrayList();
+    public final int c;
+    public final ma2 d;
+
+    public ca2(Context context, XmlResourceParser xmlResourceParser) {
+        this.c = -1;
+        TypedArray typedArrayObtainStyledAttributes = context.obtainStyledAttributes(Xml.asAttributeSet(xmlResourceParser), du8.q);
+        int indexCount = typedArrayObtainStyledAttributes.getIndexCount();
+        for (int i = 0; i < indexCount; i++) {
+            int index = typedArrayObtainStyledAttributes.getIndex(i);
+            if (index == 0) {
+                this.a = typedArrayObtainStyledAttributes.getResourceId(index, this.a);
+            } else if (index == 1) {
+                int resourceId = typedArrayObtainStyledAttributes.getResourceId(index, this.c);
+                this.c = resourceId;
+                String resourceTypeName = context.getResources().getResourceTypeName(resourceId);
+                context.getResources().getResourceName(resourceId);
+                if ("layout".equals(resourceTypeName)) {
+                    ma2 ma2Var = new ma2();
+                    this.d = ma2Var;
+                    ma2Var.e(context, resourceId);
+                }
+            }
+        }
+        typedArrayObtainStyledAttributes.recycle();
+    }
+}

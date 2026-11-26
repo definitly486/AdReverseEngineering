@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#000000</color>
+    <color name="balance">#ffffff</color>
+    <color name="button_text">#f4f4f4</color>
+    <color name="chat_primary">#ffffff</color>
+    <color name="chat_quote_accent">#ffa74c</color>
+    <color name="dialogBg">#342923</color>
+    <color name="global_chat_message_bubble">#38383a</color>
+    <color name="panel_color">#1c1c1e</color>
+    <color name="premierLight">#ae671d</color>
+</resources>

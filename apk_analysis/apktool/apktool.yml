@@ -1,0 +1,23 @@
+version: 3.0.3
+apkFileName: base.apk
+usesFramework:
+  ids:
+  - 1
+sdkInfo:
+  minSdkVersion: 24
+  targetSdkVersion: 37
+versionInfo:
+  versionCode: 288
+  versionName: 26.8.1-rustore-apk
+resourcesInfo:
+  packageId: 127
+doNotCompress:
+- arsc
+- jpg
+- mp3
+- png
+- so
+- wav
+- webp
+- assets/dexopt/baseline.prof
+- assets/dexopt/baseline.profm

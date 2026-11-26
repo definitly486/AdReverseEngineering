@@ -1,0 +1,9 @@
+package com.inmobi.media;
+
+import java.util.Set;
+
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public abstract class j90 {
+    public static final Set a = defpackage.va0.S0(new String[]{"cip", "cip6", "ufid", "u-id-map", "u-age", "u-yearofbirth", "u-location", "u-agegroup", "u-postalcode", "u-gender", "u-interests", "d-t1"});
+}

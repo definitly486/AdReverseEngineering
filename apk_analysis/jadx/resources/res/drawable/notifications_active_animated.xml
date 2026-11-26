@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_notifications_active_animated__0_res_0x7f08008e">
+    <target
+        android:name="bell"
+        android:animation="@drawable/_notifications_active_animated__1_res_0x7f08008f"/>
+    <target
+        android:name="clapper"
+        android:animation="@drawable/_notifications_active_animated__2_res_0x7f080090"/>
+    <target
+        android:name="wave_left"
+        android:animation="@drawable/_notifications_active_animated__3_res_0x7f080091"/>
+    <target
+        android:name="wave_left_path"
+        android:animation="@drawable/_notifications_active_animated__4_res_0x7f080092"/>
+    <target
+        android:name="wave_right"
+        android:animation="@drawable/_notifications_active_animated__5_res_0x7f080093"/>
+    <target
+        android:name="wave_right_path"
+        android:animation="@drawable/_notifications_active_animated__6_res_0x7f080094"/>
+</animated-vector>

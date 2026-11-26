@@ -1,0 +1,16 @@
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-61-            boolean z4 = true;
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-62-            if (i6 >= length) {
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-63-                if (p49Var.o == null) {
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java:64:                    throw ex2.H(method, null, "HTTP method annotation is required (e.g., @GET, @POST, etc.).", new Object[0]);
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-65-                }
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-66-                if (!p49Var.p) {
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-67-                    if (p49Var.r) {
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java:68:                        throw ex2.H(method, null, "Multipart can only be specified on HTTP methods with request body (e.g., @POST).", new Object[0]);
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-69-                    }
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-70-                    if (p49Var.q) {
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java:71:                        throw ex2.H(method, null, "FormUrlEncoded can only be specified on HTTP methods with request body (e.g., @POST).", new Object[0]);
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-72-                    }
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-73-                }
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-74-                Annotation[][] annotationArr2 = p49Var.e;
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-75-                int length2 = annotationArr2.length;
+/home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/na5.java-76-                p49Var.w = new d35[length2];

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:interpolator="@android:interpolator/linear_out_slow_in"
+    android:duration="360"
+    android:startOffset="120"
+    android:valueFrom="1.5"
+    android:valueTo="0"
+    android:valueType="floatType"
+    android:propertyName="translateX"/>

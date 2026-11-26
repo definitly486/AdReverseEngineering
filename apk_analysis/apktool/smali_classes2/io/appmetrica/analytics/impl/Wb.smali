@@ -1,0 +1,51 @@
+.class public final Lio/appmetrica/analytics/impl/Wb;
+.super Lio/appmetrica/analytics/impl/v4;
+.source "r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32"
+
+
+# direct methods
+.method public constructor <init>(Ljava/lang/String;Ljava/lang/String;)V
+    .locals 0
+
+    .line 1
+    invoke-direct {p0, p1, p2}, Lio/appmetrica/analytics/impl/v4;-><init>(Ljava/lang/String;Ljava/lang/String;)V
+
+    .line 2
+    .line 3
+    .line 4
+    return-void
+.end method
+
+
+# virtual methods
+.method public final d()Z
+    .locals 0
+
+    .line 1
+    const/4 p0, 0x1
+
+    .line 2
+    return p0
+.end method
+
+.method public final e()Ljava/lang/String;
+    .locals 0
+
+    .line 1
+    iget-object p0, p0, Lio/appmetrica/analytics/impl/v4;->a:Ljava/lang/String;
+
+    .line 2
+    .line 3
+    return-object p0
+.end method
+
+.method public final toString()Ljava/lang/String;
+    .locals 0
+
+    .line 1
+    iget-object p0, p0, Lio/appmetrica/analytics/impl/v4;->a:Ljava/lang/String;
+
+    .line 2
+    .line 3
+    return-object p0
+.end method

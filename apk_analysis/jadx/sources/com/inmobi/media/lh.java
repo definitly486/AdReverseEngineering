@@ -1,0 +1,81 @@
+package com.inmobi.media;
+
+import defpackage.a9b;
+import defpackage.he2;
+import defpackage.kg4;
+import defpackage.pfa;
+
+/* JADX INFO: compiled from: r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32 */
+/* JADX INFO: loaded from: classes2.dex */
+public final class lh extends pfa implements kg4 {
+    public int a;
+    public final /* synthetic */ long b;
+    public final /* synthetic */ oh c;
+
+    /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+    public lh(long j, oh ohVar, he2 he2Var) {
+        super(2, he2Var);
+        this.b = j;
+        this.c = ohVar;
+    }
+
+    @Override // defpackage.or0
+    public final he2 create(Object obj, he2 he2Var) {
+        return new lh(this.b, this.c, he2Var);
+    }
+
+    @Override // defpackage.kg4
+    public final Object invoke(Object obj, Object obj2) {
+        return new lh(this.b, this.c, (he2) obj2).invokeSuspend(a9b.a);
+    }
+
+    /* JADX WARN: Code restructure failed: missing block: B:13:0x0032, code lost:
+    
+        if (r7.f(r6) == r3) goto L14;
+     */
+    @Override // defpackage.or0
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+        To view partially-correct add '--show-bad-code' argument
+    */
+    public final java.lang.Object invokeSuspend(java.lang.Object r7) {
+        /*
+            r6 = this;
+            int r0 = r6.a
+            r1 = 2
+            r2 = 1
+            hg2 r3 = defpackage.hg2.a
+            if (r0 == 0) goto L1b
+            if (r0 == r2) goto L17
+            if (r0 != r1) goto L10
+            defpackage.n25.Q(r7)
+            goto L35
+        L10:
+            java.lang.String r6 = "call to 'resume' before 'invoke' with coroutine"
+            defpackage.wc.u(r6)
+            r6 = 0
+            return r6
+        L17:
+            defpackage.n25.Q(r7)
+            goto L28
+        L1b:
+            defpackage.n25.Q(r7)
+            long r4 = r6.b
+            r6.a = r2
+            java.lang.Object r7 = defpackage.cec.z(r4, r6)
+            if (r7 == r3) goto L34
+        L28:
+            com.inmobi.media.oh r7 = r6.c
+            r6.a = r1
+            java.util.concurrent.atomic.AtomicBoolean r0 = com.inmobi.media.oh.h
+            java.lang.Object r6 = r7.f(r6)
+            if (r6 != r3) goto L35
+        L34:
+            return r3
+        L35:
+            a9b r6 = defpackage.a9b.a
+            return r6
+        */
+        throw new UnsupportedOperationException("Method not decompiled: com.inmobi.media.lh.invokeSuspend(java.lang.Object):java.lang.Object");
+    }
+}

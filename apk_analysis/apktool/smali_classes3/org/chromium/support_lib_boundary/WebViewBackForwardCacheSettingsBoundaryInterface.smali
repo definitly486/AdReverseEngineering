@@ -1,0 +1,14 @@
+.class public interface abstract Lorg/chromium/support_lib_boundary/WebViewBackForwardCacheSettingsBoundaryInterface;
+.super Ljava/lang/Object;
+.source "r8-map-id-88e60a0b00c44f446761c69dbdea1ba6dba6b1d88516f4344ee4a32f493f3b32"
+
+# interfaces
+.implements Lorg/chromium/support_lib_boundary/IsomorphicObjectBoundaryInterface;
+
+
+# virtual methods
+.method public abstract getMaxPagesInCache()I
+.end method
+
+.method public abstract getTimeoutInSeconds()I
+.end method

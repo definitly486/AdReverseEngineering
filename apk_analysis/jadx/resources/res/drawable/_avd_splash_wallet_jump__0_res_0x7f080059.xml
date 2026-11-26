@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:height="108dp"
+    android:width="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:name="fit"
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.95"
+        android:scaleY="0.95"
+        android:translateY="4.5">
+        <group
+            android:name="root"
+            android:pivotX="52.5"
+            android:pivotY="75.5">
+            <group android:name="bills">
+                <clip-path android:pathData="M20,10H88V74H20Z"/>
+                <group
+                    android:name="bill_back_anim"
+                    android:pivotX="46"
+                    android:pivotY="48">
+                    <group
+                        android:name="bill_back"
+                        android:rotation="-38"
+                        android:translateX="33.9"
+                        android:translateY="46.7">
+                        <path
+                            android:fillColor="#5ba873"
+                            android:pathData="M1.6,0H22.4A1.6,1.6 0,0 1,24 1.6V14.4A1.6,1.6 0,0 1,22.4 16H1.6A1.6,1.6 0,0 1,0 14.4V1.6A1.6,1.6 0,0 1,1.6 0Z"/>
+                        <path
+                            android:fillColor="#468f5e"
+                            android:pathData="M3.6,2.5H20.4A1.1,1.1 0,0 1,21.5 3.6V12.4A1.1,1.1 0,0 1,20.4 13.5H3.6A1.1,1.1 0,0 1,2.5 12.4V3.6A1.1,1.1 0,0 1,3.6 2.5Z"/>
+                    </group>
+                </group>
+                <group
+                    android:name="bill_front_anim"
+                    android:pivotX="55"
+                    android:pivotY="48">
+                    <group
+                        android:name="bill_front"
+                        android:rotation="-38"
+                        android:translateX="41.7"
+                        android:translateY="49.2">
+                        <path
+                            android:fillColor="#5ba873"
+                            android:pathData="M1.6,0H22.4A1.6,1.6 0,0 1,24 1.6V14.4A1.6,1.6 0,0 1,22.4 16H1.6A1.6,1.6 0,0 1,0 14.4V1.6A1.6,1.6 0,0 1,1.6 0Z"/>
+                        <path
+                            android:fillColor="#468f5e"
+                            android:pathData="M3.6,2.5H20.4A1.1,1.1 0,0 1,21.5 3.6V12.4A1.1,1.1 0,0 1,20.4 13.5H3.6A1.1,1.1 0,0 1,2.5 12.4V3.6A1.1,1.1 0,0 1,3.6 2.5Z"/>
+                    </group>
+                </group>
+            </group>
+            <path
+                android:fillColor="@drawable/_avd_splash_wallet_jump__1_res_0x7f08005a"
+                android:pathData="M37,44.25H68A4.5,4.5 0,0 1,72.5 48.75V71A4.5,4.5 0,0 1,68 75.5H37A4.5,4.5 0,0 1,32.5 71V48.75A4.5,4.5 0,0 1,37 44.25Z"/>
+            <group
+                android:name="clasp"
+                android:pivotX="62.8"
+                android:pivotY="59.85">
+                <path
+                    android:fillColor="#f8c190"
+                    android:pathData="M63.85,54.4H74.1A1.2,1.2 0,0 1,75.3 55.6V64.1A1.2,1.2 0,0 1,74.1 65.3H63.85A5.45,5.45 0,0 1,63.85 54.4Z"/>
+                <path
+                    android:fillColor="#623f2f"
+                    android:pathData="M60.75,59.85A2.05,2.05 0,1 1,64.85 59.85A2.05,2.05 0,1 1,60.75 59.85Z"/>
+            </group>
+        </group>
+    </group>
+</vector>

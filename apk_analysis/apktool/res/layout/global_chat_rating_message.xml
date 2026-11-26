@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:gravity="bottom" android:orientation="horizontal" android:paddingTop="5.0dp" android:layout_width="match_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/ratingMessageGlobalPic" android:layout_width="40.0dp" android:layout_height="40.0dp" />
+    <LinearLayout android:gravity="start" android:orientation="vertical" android:id="@id/globalChatRatingMessageLay" android:background="@drawable/message_bubble" android:padding="10.0dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6.0dp" android:backgroundTint="@color/global_chat_message_bubble">
+        <TextView android:textSize="12.0sp" android:id="@id/ratingMessageGlobalName" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Nickname" android:maxLength="10" android:fontFamily="@font/inter_semibold" />
+        <TextView android:id="@id/ratingMessageGlobalText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:maxWidth="260.0dp" android:text="@string/pavloffme_560" android:fontFamily="@font/inter" />
+        <RatingBar android:id="@id/ratingBar" android:layout_width="wrap_content" android:layout_height="wrap_content" android:max="5" android:numStars="5" android:stepSize="1.0" android:progressTint="@color/chat_primary" />
+        <Button android:enabled="false" android:id="@id/ratingMessageSend" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="5.0dp" android:text="@string/pavloffme_562" android:fontFamily="@font/inter_semibold" />
+        <TextView android:textSize="10.0sp" android:id="@id/ratingMessageGlobalSendTime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="12:56" android:alpha="0.7" android:fontFamily="@font/inter" android:textAlignment="textStart" />
+        <TextView android:textColor="#860a0a" android:id="@id/messageGlobalTextWarning" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/pavloffme_578" android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+</LinearLayout>
