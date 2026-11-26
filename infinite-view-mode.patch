@@ -1,0 +1,264 @@
+--- a/android/app/src/main/java/com/adcoin/client/MaxRewardedController.kt
++++ b/android/app/src/main/java/com/adcoin/client/MaxRewardedController.kt
+@@ -9,6 +9,7 @@
+ import com.applovin.sdk.AppLovinMediationProvider
+ import com.applovin.sdk.AppLovinSdk
+ import com.applovin.sdk.AppLovinSdkInitializationConfiguration
++import java.util.concurrent.atomic.AtomicBoolean
+ 
+ class MaxRewardedController(
+     private val activity: Activity,
+@@ -19,6 +20,9 @@
+     private var rewardedAd: MaxRewardedAd? = null
+     private var initialized = false
+ 
++    /** One onUserRewarded per shown creative. */
++    private val rewardConsumedForCurrentAd = AtomicBoolean(false)
++
+     fun initializeAndLoad() {
+         val sdkKey = BuildConfig.APPLOVIN_SDK_KEY
+         val unitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
+@@ -47,17 +51,28 @@
+         }
+     }
+ 
+-    fun show() {
++    fun isReady(): Boolean = initialized && (rewardedAd?.isReady == true)
++
++    /**
++     * Show only on explicit user action.
++     * No auto-show even if an ad is already loaded.
++     */
++    fun show(): Boolean {
+         val ad = rewardedAd
+         if (!initialized || ad == null) {
+             onMessage("Реклама ещё не готова. Попробуйте через несколько секунд.")
+-            if (initialized) rewardedAd?.loadAd()
+-            return
++            if (initialized) ad?.loadAd()
++            return false
+         }
+-        if (ad.isReady) ad.showAd() else {
++        if (!ad.isReady) {
+             onMessage("Реклама загружается…")
+             ad.loadAd()
++            return false
+         }
++        // New impression — allow exactly one onUserRewarded.
++        rewardConsumedForCurrentAd.set(false)
++        ad.showAd()
++        return true
+     }
+ 
+     override fun onAdLoaded(ad: MaxAd) {
+@@ -69,15 +84,25 @@
+     }
+ 
+     override fun onAdDisplayed(ad: MaxAd) {}
++
+     override fun onAdHidden(ad: MaxAd) {
++        // Preload next creative without showing it.
+         rewardedAd?.loadAd()
+     }
++
+     override fun onAdClicked(ad: MaxAd) {}
++
+     override fun onAdDisplayFailed(ad: MaxAd, error: MaxError) {
+         onMessage("Не удалось показать рекламу (код ${error.code}).")
+         rewardedAd?.loadAd()
+     }
++
+     override fun onUserRewarded(ad: MaxAd, reward: MaxReward) {
++        // Ignore duplicate callback for the same impression.
++        if (!rewardConsumedForCurrentAd.compareAndSet(false, true)) {
++            onMessage("Повторный onUserRewarded проигнорирован (уже обработан).")
++            return
++        }
+         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
+         onRewarded()
+     }
+--- a/android/app/src/main/java/com/adcoin/client/AdCoinViewModel.kt
++++ b/android/app/src/main/java/com/adcoin/client/AdCoinViewModel.kt
+@@ -21,7 +21,12 @@
+     val dailyProgress: Int? = null,
+     val dailyTarget: Int? = null,
+     val dailyReward: Int? = null,
+-    val checkingReward: Boolean = false
++    val checkingReward: Boolean = false,
++    // Infinite view mode
++    val infiniteMode: Boolean = false,
++    val awaitNextConfirm: Boolean = false,
++    val videosCompleted: Int = 0,
++    val rewardInFlight: Boolean = false
+ )
+ 
+ class AdCoinViewModel(application: Application) : AndroidViewModel(application) {
+@@ -107,9 +112,56 @@
+         }
+     }
+ 
++    /** Enable infinite mode; first video still requires an explicit user press. */
++    fun startInfiniteMode() {
++        if (_state.value.userId.isNullOrBlank()) {
++            _state.value = _state.value.copy(message = "Нет userId — бесконечный режим недоступен.")
++            return
++        }
++        _state.value = _state.value.copy(
++            infiniteMode = true,
++            awaitNextConfirm = false,
++            videosCompleted = 0,
++            message = "Бесконечный просмотр включён. Нажмите «Смотреть», чтобы начать первое видео."
++        )
++    }
++
++    /** Stop the cycle and cancel any further auto-prompts for the next video. */
++    fun stopInfiniteMode() {
++        _state.value = _state.value.copy(
++            infiniteMode = false,
++            awaitNextConfirm = false,
++            message = "Бесконечный просмотр остановлен."
++        )
++    }
++
++    /**
++     * User confirmed the next video in infinite mode.
++     * Actual show is performed by the Activity via controller.show().
++     * Returns true if the UI should call show().
++     */
++    fun confirmNextVideo(): Boolean {
++        val s = _state.value
++        if (!s.infiniteMode || s.rewardInFlight || s.checkingReward) return false
++        // First video uses the primary "Watch" button (videosCompleted == 0, awaitNextConfirm == false).
++        // Subsequent videos require awaitNextConfirm.
++        if (s.videosCompleted > 0 && !s.awaitNextConfirm) return false
++        _state.value = s.copy(awaitNextConfirm = false, message = null)
++        return true
++    }
++
+     fun onRewarded() {
++        // Guard against re-entrant / duplicate reward processing.
++        if (_state.value.rewardInFlight) {
++            setMessage("Начисление уже проверяется — повторный callback проигнорирован.")
++            return
++        }
+         viewModelScope.launch {
+-            _state.value = _state.value.copy(checkingReward = true, message = "Реклама завершена. Проверяем серверный баланс…")
++            _state.value = _state.value.copy(
++                rewardInFlight = true,
++                checkingReward = true,
++                message = "Реклама завершена. Проверяем серверный баланс…"
++            )
+             var credited = false
+             for (attempt in 0 until 12) {
+                 delay(5_000)
+@@ -130,10 +182,24 @@
+                     }
+                 }
+             }
++            val wasInfinite = _state.value.infiniteMode
++            val completed = _state.value.videosCompleted + 1
+             _state.value = _state.value.copy(
+                 checkingReward = false,
+-                message = if (credited) "Сервер подтвердил увеличение баланса." else
+-                    "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
++                rewardInFlight = false,
++                videosCompleted = completed,
++                // After every completed impression, require explicit consent for the next one.
++                awaitNextConfirm = wasInfinite,
++                message = when {
++                    credited && wasInfinite ->
++                        "Сервер подтвердил начисление (#$completed). Нажмите «Следующее видео» или «Стоп»."
++                    credited ->
++                        "Сервер подтвердил увеличение баланса."
++                    wasInfinite ->
++                        "Показ #$completed завершён, серверное начисление пока не видно. «Следующее видео» или «Стоп»."
++                    else ->
++                        "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
++                }
+             )
+         }
+     }
+--- a/android/app/src/main/java/com/adcoin/client/MainActivity.kt
++++ b/android/app/src/main/java/com/adcoin/client/MainActivity.kt
+@@ -161,15 +161,76 @@
+         Card(modifier = Modifier.fillMaxWidth()) {
+             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                 Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
+-                Text("После просмотра приложение проверяет изменение баланса на сервере. Сам callback рекламной сети не считается зачислением.")
++                Text(
++                    "Начисление только после onUserRewarded и подтверждения роста баланса на сервере. " +
++                        "Автопоказ отключён — каждое следующее видео требует вашего согласия.",
++                    style = MaterialTheme.typography.bodySmall,
++                    color = Color.LightGray
++                )
++
++                if (state.infiniteMode) {
++                    Text(
++                        "Бесконечный просмотр · завершено: ${state.videosCompleted}",
++                        color = Color(0xFF8BDAA8)
++                    )
++                }
++
++                // Primary watch button (single ad, or first ad in infinite mode).
+                 Button(
+-                    onClick = onWatchAd,
+-                    enabled = !state.checkingReward && !state.userId.isNullOrBlank(),
++                    onClick = {
++                        // In infinite mode while waiting for next confirmation, use the dedicated button.
++                        if (state.infiniteMode && state.awaitNextConfirm) return@Button
++                        onWatchAd()
++                    },
++                    enabled = !state.checkingReward &&
++                        !state.rewardInFlight &&
++                        !state.userId.isNullOrBlank() &&
++                        !(state.infiniteMode && state.awaitNextConfirm),
+                     modifier = Modifier.fillMaxWidth()
+-                ) { Text("Смотреть рекламу") }
++                ) {
++                    Text(
++                        when {
++                            state.infiniteMode && state.videosCompleted == 0 -> "Смотреть первое видео"
++                            else -> "Смотреть рекламу"
++                        }
++                    )
++                }
++
++                // Explicit consent for the next video in infinite mode.
++                if (state.infiniteMode && state.awaitNextConfirm && !state.checkingReward) {
++                    Button(
++                        onClick = {
++                            if (vm.confirmNextVideo()) onWatchAd()
++                        },
++                        enabled = !state.rewardInFlight,
++                        modifier = Modifier.fillMaxWidth()
++                    ) { Text("Следующее видео") }
++                }
++
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.spacedBy(8.dp)
++                ) {
++                    if (!state.infiniteMode) {
++                        OutlinedButton(
++                            onClick = vm::startInfiniteMode,
++                            enabled = !state.userId.isNullOrBlank() && !state.checkingReward && !state.rewardInFlight,
++                            modifier = Modifier.weight(1f)
++                        ) { Text("Бесконечный просмотр") }
++                    } else {
++                        OutlinedButton(
++                            onClick = vm::stopInfiniteMode,
++                            modifier = Modifier.weight(1f)
++                        ) { Text("Стоп") }
++                    }
++                }
++
+                 if (state.checkingReward) CircularProgressIndicator()
+                 if (state.userId.isNullOrBlank()) {
+-                    Text("Для MAX требуется внутренний ID пользователя из ответа AdCoin.", color = Color(0xFFFFCC80))
++                    Text(
++                        "Для MAX требуется внутренний ID пользователя из ответа AdCoin.",
++                        color = Color(0xFFFFCC80)
++                    )
+                 }
+             }
+         }

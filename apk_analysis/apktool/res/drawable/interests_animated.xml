@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<animated-vector android:drawable="@drawable/$interests_animated__0"
-  xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android">
-    <target android:name="triangle" android:animation="@drawable/$interests_animated__1" />
-    <target android:name="heart" android:animation="@drawable/$interests_animated__2" />
-    <target android:name="circle_drop" android:animation="@drawable/$interests_animated__3" />
-    <target android:name="circle" android:animation="@drawable/$interests_animated__4" />
-    <target android:name="square" android:animation="@drawable/$interests_animated__5" />
-</animated-vector>

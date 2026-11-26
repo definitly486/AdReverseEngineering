@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:drawable="@drawable/_avd_search__0_res_0x7f080053">
-    <target
-        android:name="glass"
-        android:animation="@drawable/_avd_search__1_res_0x7f080054"/>
-    <target
-        android:name="glint"
-        android:animation="@drawable/_avd_search__2_res_0x7f080055"/>
-</animated-vector>

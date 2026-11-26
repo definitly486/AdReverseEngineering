@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<animated-vector android:drawable="@drawable/$move_to_inbox_animated__0"
-  xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android">
-    <target android:name="arrow" android:animation="@drawable/$move_to_inbox_animated__1" />
-    <target android:name="tray" android:animation="@drawable/$move_to_inbox_animated__2" />
-</animated-vector>

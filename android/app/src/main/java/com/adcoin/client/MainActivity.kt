@@ -161,15 +161,76 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
-                Text("После просмотра приложение проверяет изменение баланса на сервере. Сам callback рекламной сети не считается зачислением.")
+                Text(
+                    "Начисление только после onUserRewarded и подтверждения роста баланса на сервере. " +
+                        "Автопоказ отключён — каждое следующее видео требует вашего согласия.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
+
+                if (state.infiniteMode) {
+                    Text(
+                        "Бесконечный просмотр · завершено: ${state.videosCompleted}",
+                        color = Color(0xFF8BDAA8)
+                    )
+                }
+
+                // Primary watch button (single ad, or first ad in infinite mode).
                 Button(
-                    onClick = onWatchAd,
-                    enabled = !state.checkingReward && !state.userId.isNullOrBlank(),
+                    onClick = {
+                        // In infinite mode while waiting for next confirmation, use the dedicated button.
+                        if (state.infiniteMode && state.awaitNextConfirm) return@Button
+                        onWatchAd()
+                    },
+                    enabled = !state.checkingReward &&
+                        !state.rewardInFlight &&
+                        !state.userId.isNullOrBlank() &&
+                        !(state.infiniteMode && state.awaitNextConfirm),
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Смотреть рекламу") }
+                ) {
+                    Text(
+                        when {
+                            state.infiniteMode && state.videosCompleted == 0 -> "Смотреть первое видео"
+                            else -> "Смотреть рекламу"
+                        }
+                    )
+                }
+
+                // Explicit consent for the next video in infinite mode.
+                if (state.infiniteMode && state.awaitNextConfirm && !state.checkingReward) {
+                    Button(
+                        onClick = {
+                            if (vm.confirmNextVideo()) onWatchAd()
+                        },
+                        enabled = !state.rewardInFlight,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Следующее видео") }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!state.infiniteMode) {
+                        OutlinedButton(
+                            onClick = vm::startInfiniteMode,
+                            enabled = !state.userId.isNullOrBlank() && !state.checkingReward && !state.rewardInFlight,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Бесконечный просмотр") }
+                    } else {
+                        OutlinedButton(
+                            onClick = vm::stopInfiniteMode,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Стоп") }
+                    }
+                }
+
                 if (state.checkingReward) CircularProgressIndicator()
                 if (state.userId.isNullOrBlank()) {
-                    Text("Для MAX требуется внутренний ID пользователя из ответа AdCoin.", color = Color(0xFFFFCC80))
+                    Text(
+                        "Для MAX требуется внутренний ID пользователя из ответа AdCoin.",
+                        color = Color(0xFFFFCC80)
+                    )
                 }
             }
         }

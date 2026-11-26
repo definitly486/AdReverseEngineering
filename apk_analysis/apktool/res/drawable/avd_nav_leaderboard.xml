@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<animated-vector android:drawable="@drawable/$avd_nav_leaderboard__0"
-  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt">
-    <target android:name="outlined" android:animation="@drawable/$avd_nav_leaderboard__1" />
-    <target android:name="bar0" android:animation="@drawable/$avd_nav_leaderboard__2" />
-    <target android:name="bar1" android:animation="@drawable/$avd_nav_leaderboard__3" />
-    <target android:name="bar2" android:animation="@drawable/$avd_nav_leaderboard__4" />
-    <target android:name="spark" android:animation="@drawable/$avd_nav_leaderboard__5" />
-</animated-vector>

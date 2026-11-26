@@ -9,6 +9,7 @@ import com.applovin.mediation.ads.MaxRewardedAd
 import com.applovin.sdk.AppLovinMediationProvider
 import com.applovin.sdk.AppLovinSdk
 import com.applovin.sdk.AppLovinSdkInitializationConfiguration
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MaxRewardedController(
     private val activity: Activity,
@@ -18,6 +19,9 @@ class MaxRewardedController(
 ) : MaxRewardedAdListener {
     private var rewardedAd: MaxRewardedAd? = null
     private var initialized = false
+
+    /** One onUserRewarded per shown creative. */
+    private val rewardConsumedForCurrentAd = AtomicBoolean(false)
 
     fun initializeAndLoad() {
         val sdkKey = BuildConfig.APPLOVIN_SDK_KEY
@@ -47,17 +51,28 @@ class MaxRewardedController(
         }
     }
 
-    fun show() {
+    fun isReady(): Boolean = initialized && (rewardedAd?.isReady == true)
+
+    /**
+     * Show only on explicit user action.
+     * No auto-show even if an ad is already loaded.
+     */
+    fun show(): Boolean {
         val ad = rewardedAd
         if (!initialized || ad == null) {
             onMessage("Реклама ещё не готова. Попробуйте через несколько секунд.")
-            if (initialized) rewardedAd?.loadAd()
-            return
+            if (initialized) ad?.loadAd()
+            return false
         }
-        if (ad.isReady) ad.showAd() else {
+        if (!ad.isReady) {
             onMessage("Реклама загружается…")
             ad.loadAd()
+            return false
         }
+        // New impression — allow exactly one onUserRewarded.
+        rewardConsumedForCurrentAd.set(false)
+        ad.showAd()
+        return true
     }
 
     override fun onAdLoaded(ad: MaxAd) {
@@ -69,15 +84,25 @@ class MaxRewardedController(
     }
 
     override fun onAdDisplayed(ad: MaxAd) {}
+
     override fun onAdHidden(ad: MaxAd) {
+        // Preload next creative without showing it.
         rewardedAd?.loadAd()
     }
+
     override fun onAdClicked(ad: MaxAd) {}
+
     override fun onAdDisplayFailed(ad: MaxAd, error: MaxError) {
         onMessage("Не удалось показать рекламу (код ${error.code}).")
         rewardedAd?.loadAd()
     }
+
     override fun onUserRewarded(ad: MaxAd, reward: MaxReward) {
+        // Ignore duplicate callback for the same impression.
+        if (!rewardConsumedForCurrentAd.compareAndSet(false, true)) {
+            onMessage("Повторный onUserRewarded проигнорирован (уже обработан).")
+            return
+        }
         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
         onRewarded()
     }

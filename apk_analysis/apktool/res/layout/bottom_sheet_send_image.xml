@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout android:theme="@style/ChatTheme" android:gravity="center" android:orientation="vertical" android:paddingTop="17.0dp" android:paddingBottom="8.0dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="17.0dp" android:paddingEnd="17.0dp"
-  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
-    <TextView android:textSize="16.0sp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/pavloffme_566" android:fontFamily="@font/inter_extrabold" android:layout_marginStart="10.0dp" />
-    <androidx.cardview.widget.CardView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10.0dp" android:elevation="0.0dp" app:cardBackgroundColor="@null" app:cardCornerRadius="10.0dp" app:cardElevation="0.0dp" app:cardMaxElevation="0.0dp">
-        <ImageView android:id="@id/imagePreview" android:layout_width="match_parent" android:layout_height="wrap_content" android:adjustViewBounds="true" android:maxHeight="300.0dp" />
-    </androidx.cardview.widget.CardView>
-    <com.google.android.material.button.MaterialButton android:id="@id/sendImage" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8.0dp" android:text="@string/pavloffme_567" android:fontFamily="@font/inter_semibold" />
-</LinearLayout>
