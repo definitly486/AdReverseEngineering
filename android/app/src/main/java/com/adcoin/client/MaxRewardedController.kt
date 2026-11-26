@@ -91,6 +91,9 @@ class MaxRewardedController(
     }
     override fun onAdDisplayed(ad: MaxAd) {
         logEvent("onAdDisplayed", ad)
+        // Arm the close watcher immediately. It waits for the real X control,
+        // rather than waiting for onUserRewarded (which may arrive too late).
+        autoCloser?.startWatchingForClose()
         onAdDisplayedCallback()
     }
     override fun onAdHidden(ad: MaxAd) {
@@ -113,6 +116,5 @@ class MaxRewardedController(
         logEvent("onUserRewarded", ad, "amount=${reward.amount} label=${reward.label}")
         onMessage("MAX сообщил о награде. Проверяем зачисление на сервере AdCoin…")
         onRewarded()
-        autoCloser?.startAfterReward()
     }
 }
