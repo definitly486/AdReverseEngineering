@@ -1,0 +1,46 @@
+AUTHENTICATION DEEP ANALYSIS
+============================
+
+Source: /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources
+Date:   2026-11-26T13:15:56+03:00
+
+Result files:
+reports/auth_deep/auth/endpoints_and_dto.txt
+reports/auth_deep/auth/headers_and_interceptors.txt
+reports/auth_deep/auth/network_clients.txt
+reports/auth_deep/auth/token_storage.txt
+reports/auth_deep/auth/urls.txt
+reports/auth_deep/classes/auth_named_files.txt
+reports/auth_deep/REPORT.txt
+
+Top URL candidates (from urls.txt):
+   2 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/w05.java:1199:https://cdn.adcoinapp.com/lottie/saving_money.json
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/org/chromium/support_lib_boundary/PrefetchOperationCallbackBoundaryInterface.java:30:http://crbug.com/483041824
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/content/UrlProvider.java:26:https://x.thecatmachine.com
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/content/UrlProvider.java:26:https://x.everestop.io
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/content/UrlProvider.java:26:https://x.blueduckredapple.com
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/content/UrlProvider.java:25:https://api.bidmachine.io
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/appmetrica/analytics/impl/C0401k0.java:22:https://appmetrica.io/docs/mobile-sdk-dg/android/about/android-initialize.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/appmetrica/analytics/impl/C0401k0.java:16:https://appmetrica.io/docs/mobile-sdk-dg/android/about/android-initialize.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/io/appmetrica/analytics/BuildConfig.java:12:https://startup.mobile.yandex.net/
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/zkb.java:33:https://cdn.adcoinapp.com/lottie/saving_money.json
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/zg4.java:627:http://tizen.org/system/model_name
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/zg4.java:627:http://tizen.org/feature/platform.version
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/zc.java:303:https://firebase.google.com/docs/crashlytics/get-started
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/zc.java:231:https://firebase-settings.crashlytics.com/spi/v2/platforms/android/gmp/
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/yz0.java:2568:https://cdn.adcoinapp.com/method/
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/y2c.java:69:https://localhost
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/y15.java:189:http://xmlpull.org/v1/doc/features.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/xj7.java:88:https://cdn.adcoinapp.com/lottie/saving_money.json
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/wp8.java:17:https://youtrack.jetbrains.com/issue/KT-55980
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/vv8.java:169:http://g.co/dev/packagevisibility.
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/vo0.java:69:https://yx
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:258:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:248:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:211:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:205:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:157:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:121:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/ve6.java:100:https://www.slf4j.org/codes.html
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/uv8.java:201:http://g.co/dev/packagevisibility.
+   1 /home/definitly/home/definitly/AdReverseEngineering/apk_analysis/jadx/sources/defpackage/urb.java:257:https://issuetracker.google.com/issues/new

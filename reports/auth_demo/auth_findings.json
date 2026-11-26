@@ -1,0 +1,308 @@
+{
+  "app_name": "AdCoin",
+  "source_root": "/tmp/adcoin_demo/sources",
+  "files_scanned": 205,
+  "findings": {
+    "confirm_api_and_response": [],
+    "response_json_and_models": [],
+    "token_fields": [],
+    "token_storage": [
+      {
+        "path": "defpackage/vfc.java",
+        "line": 6,
+        "text": "import io.content.SessionManager;"
+      },
+      {
+        "path": "defpackage/vfc.java",
+        "line": 31,
+        "text": "((o) b2cVar.a).b(SessionManager.get().getSessionId(), wfcVar.a, wfcVar.b);"
+      },
+      {
+        "path": "defpackage/fha.java",
+        "line": 207,
+        "text": "dhaVar = new dha(cursorQuery.isNull(iF) ? null : cursorQuery.getString(iF), cursorQuery.getInt(iF2), cursorQuery.getInt(iF3));"
+      },
+      {
+        "path": "defpackage/db1.java",
+        "line": 295,
+        "text": "vl4Var = (bundleExtra == null || (string = bundleExtra.getString(\"androidx.credentials.provider.extra.EXTRA_CREDENTIAL_TYPE\")) == null || (bundle2 = bundleExtra.getBundle(\"androidx.credentials.provider.extra.EXTRA_CREDENTIAL_DATA\")) == null) ? null : new vl4(t0c.r(bundle2, string));"
+      },
+      {
+        "path": "defpackage/db1.java",
+        "line": 313,
+        "text": "String string2 = bundleExtra2.getString(\"androidx.credentials.provider.extra.CREATE_CREDENTIAL_EXCEPTION_TYPE\");"
+      },
+      {
+        "path": "defpackage/tv5.java",
+        "line": 61,
+        "text": "this.c = typedArrayObtainStyledAttributes.getString(index);"
+      },
+      {
+        "path": "defpackage/tv5.java",
+        "line": 64,
+        "text": "this.c = typedArrayObtainStyledAttributes.getString(index);"
+      },
+      {
+        "path": "defpackage/tv5.java",
+        "line": 74,
+        "text": "this.g = typedArrayObtainStyledAttributes.getString(index);"
+      },
+      {
+        "path": "app/adcoin/PushNotificationService.java",
+        "line": 78,
+        "text": "String string = getString(R.string.push_channel_id);"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 380,
+        "text": "String stringExtra = getIntent().getStringExtra(\"clan_pic\");"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 401,
+        "text": "String stringExtra2 = getIntent().getStringExtra(\"clan_name\");"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 403,
+        "text": "stringExtra2 = getString(R.string.pavloffme_586);"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 411,
+        "text": "if (getIntent().getStringExtra(\"clan\") != null) {"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 418,
+        "text": "i6Var3.f.setText(getString(R.string.adcoinmini_LOADING));"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 426,
+        "text": "if (getIntent().getStringExtra(\"support\") != null) {"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 438,
+        "text": "i6Var5.f.setText(getString(R.string.pavloffme_557));"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 605,
+        "text": "String stringExtra3 = getIntent().getStringExtra(\"message\");"
+      }
+    ],
+    "authorization_in_requests": [
+      {
+        "path": "defpackage/q78.java",
+        "line": 23,
+        "text": "int iBeginObjectHeader = SafeParcelWriter.beginObjectHeader(parcel);"
+      },
+      {
+        "path": "defpackage/q78.java",
+        "line": 25,
+        "text": "SafeParcelWriter.finishObjectHeader(parcel, iBeginObjectHeader);"
+      }
+    ],
+    "refresh_and_session_restore": [
+      {
+        "path": "defpackage/vfc.java",
+        "line": 6,
+        "text": "import io.content.SessionManager;"
+      },
+      {
+        "path": "defpackage/vfc.java",
+        "line": 31,
+        "text": "((o) b2cVar.a).b(SessionManager.get().getSessionId(), wfcVar.a, wfcVar.b);"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 7,
+        "text": "import android.view.ScrollCaptureSession;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 33,
+        "text": "public final Object a(ScrollCaptureSession scrollCaptureSession, rl5 rl5Var, ie2 ie2Var) {"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 37,
+        "text": "ScrollCaptureSession scrollCaptureSessionJ;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 65,
+        "text": "k62Var.r = scrollCaptureSession;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 97,
+        "text": "ScrollCaptureSession scrollCaptureSessionJ2 = ck.j(k62Var.r);"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 102,
+        "text": "scrollCaptureSession = scrollCaptureSessionJ2;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 111,
+        "text": "scrollCaptureSessionJ = ck.j(k62Var.r);"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 121,
+        "text": "canvasLockHardwareCanvas = scrollCaptureSessionJ.getSurface().lockHardwareCanvas();"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 131,
+        "text": "scrollCaptureSessionJ.getSurface().unlockCanvasAndPost(canvasLockHardwareCanvas);"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 134,
+        "text": "k62Var.r = scrollCaptureSession;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 140,
+        "text": "scrollCaptureSessionJ = scrollCaptureSession;"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 151,
+        "text": "canvasLockHardwareCanvas = scrollCaptureSessionJ.getSurface().lockHardwareCanvas();"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 167,
+        "text": "public final void onScrollCaptureImageRequest(ScrollCaptureSession scrollCaptureSession, CancellationSignal cancellationSignal, Rect rect, Consumer consumer) {"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 168,
+        "text": "l7a l7aVarE = ep2.E(this.e, null, null, new j62(this, scrollCaptureSession, rect, consumer, null), 3);"
+      },
+      {
+        "path": "defpackage/m62.java",
+        "line": 177,
+        "text": "public final void onScrollCaptureStart(ScrollCaptureSession scrollCaptureSession, CancellationSignal cancellationSignal, Runnable runnable) {"
+      },
+      {
+        "path": "defpackage/hfc.java",
+        "line": 4,
+        "text": "import com.iab.omid.library.appodeal.adsession.Partner;"
+      },
+      {
+        "path": "defpackage/np5.java",
+        "line": 146,
+        "text": "recyclerView.invalidate();"
+      },
+      {
+        "path": "defpackage/np5.java",
+        "line": 601,
+        "text": "this.r.invalidate();"
+      },
+      {
+        "path": "defpackage/g99.java",
+        "line": 144,
+        "text": "public final void invalidateDrawable(Drawable drawable) {"
+      },
+      {
+        "path": "defpackage/s84.java",
+        "line": 24,
+        "text": "kj kjVar = new kj(0, this, s84.class, \"invalidateNodes\", \"invalidateNodes()V\", 0, (byte) 6);"
+      }
+    ],
+    "signin_endpoint": [],
+    "base_url_and_host": [
+      {
+        "path": "app/adcoin/PushNotificationService.java",
+        "line": 66,
+        "text": "Uri uri = Uri.parse(\"https://api.adcoinapp.com/routing?context=\" + ((pa0) u19Var.a()).get(\"context\") + \"&contextData=\" + ((pa0) u19Var.a()).get(\"contextData\"));"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 445,
+        "text": "lu4VarN2.D = \"https://adcoinapi.su/API6/clans/chat/get_messages.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 446,
+        "text": "lu4VarN2.E = \"https://adcoinapi.su/API6/clans/chat/send_text_message.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 447,
+        "text": "lu4VarN2.F = \"https://adcoinapi.su/API6/clans/chat/send_image_message.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 448,
+        "text": "lu4VarN2.G = \"https://adcoinapi.su/API6/clans/chat/delete_message.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 449,
+        "text": "lu4VarN2.H = \"https://adcoinapi.su/API6/clans/chat/get_permission_level.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 451,
+        "text": "lu4VarN2.D = \"https://adcoinapi.su/API6/support/get_messages.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 452,
+        "text": "lu4VarN2.E = \"https://adcoinapi.su/API6/support/sendMessage.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 453,
+        "text": "lu4VarN2.F = \"https://adcoinapi.su/API6/support/SendImageMessage.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 454,
+        "text": "lu4VarN2.H = \"https://adcoinapi.su/API6/support/get_user_permission.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 456,
+        "text": "lu4VarN2.D = \"https://adcoinapi.su/API6/chat/get_messages.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 457,
+        "text": "lu4VarN2.E = \"https://adcoinapi.su/API6/chat/SendTextMessage.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 458,
+        "text": "lu4VarN2.F = \"https://adcoinapi.su/API6/chat/SendImageMessage.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 459,
+        "text": "lu4VarN2.G = \"https://adcoinapi.su/API6/chat/delete_message.php\";"
+      },
+      {
+        "path": "app/adcoin/activities/GlobalChatActivity.java",
+        "line": 460,
+        "text": "lu4VarN2.H = \"https://adcoinapi.su/API6/chat/GetPermissionLevel.php\";"
+      }
+    ]
+  },
+  "next_trace": [
+    "Найти реализацию login/confirm API и тип ответа.",
+    "Проследить точные JSON-ключи через DTO / аннотации / адаптер.",
+    "Проследить поле токена до места записи в preferences / keystore.",
+    "Найти чтение сохранённого значения при старте приложения.",
+    "Найти interceptor или место формирования Authorization / Cookie.",
+    "Отдельно подтвердить refresh endpoint, тело, ответ и срок действия."
+  ],
+  "caution": "Regex-совпадения — подсказки статического анализа, а не доказательство. Не публикуй в репозитории реальные коды, токены, cookies или ответы аккаунта."
+}
