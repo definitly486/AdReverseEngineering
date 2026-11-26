@@ -1,8 +1,12 @@
 package com.adcoin.client
 
-import android.os.Bundle
 import android.content.Intent
+import android.content.res.Configuration
+import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import android.util.Rational
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,14 +45,45 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private val pipMode = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AdCoinApp() }
+        setContent {
+            AdCoinApp(
+                isInPip = pipMode.value,
+                onEnterPip = ::enterAppPictureInPicture
+            )
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipMode.value = isInPictureInPictureMode
+    }
+
+    private fun enterAppPictureInPicture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            Toast.makeText(this, "PiP требует Android 8.0 или новее", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val params = android.app.PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .build()
+        enterPictureInPictureMode(params)
     }
 }
 
 @Composable
-private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
+private fun AdCoinApp(
+    isInPip: Boolean,
+    onEnterPip: () -> Unit,
+    vm: AdCoinViewModel = viewModel()
+) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val activity = context as? android.app.Activity
@@ -87,12 +123,31 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
         surface = Color(0xFF19231D)
     )) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            if (!state.tokenPresent) {
+            if (isInPip) {
+                PipStatus(state.infiniteMode, state.videosCompleted)
+            } else if (!state.tokenPresent) {
                 LoginScreen(state, vm)
             } else {
-                DashboardScreen(state, vm, onWatchAd = { controller?.show() })
+                DashboardScreen(
+                    state = state,
+                    vm = vm,
+                    onWatchAd = { controller?.show() },
+                    onEnterPip = onEnterPip
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun PipStatus(infiniteMode: Boolean, videosCompleted: Int) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(10.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("AdReverse · PiP", fontWeight = FontWeight.Bold, color = Color(0xFF8BDAA8))
+        Text(if (infiniteMode) "Просмотр активен: $videosCompleted" else "Приложение свернуто")
+        Text("Тестовое окно приложения, не видеоплеер MAX", color = Color.LightGray)
     }
 }
 
@@ -144,7 +199,12 @@ private fun LoginScreen(state: ClientState, vm: AdCoinViewModel) {
 }
 
 @Composable
-private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: () -> Unit) {
+private fun DashboardScreen(
+    state: ClientState,
+    vm: AdCoinViewModel,
+    onWatchAd: () -> Unit,
+    onEnterPip: () -> Unit
+) {
     val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -190,8 +250,6 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     )
                 }
 
-                // The first impression is explicitly started by the user. Later impressions
-                // require MAX hidden + server-confirmed reward + a preloaded next ad.
                 if (!state.infiniteMode || state.videosCompleted == 0) {
                     Button(
                         onClick = onWatchAd,
@@ -207,6 +265,19 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                         color = Color(0xFF8BDAA8)
                     )
                 }
+
+                OutlinedButton(
+                    onClick = onEnterPip,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Проверить PiP (свернуть приложение)")
+                }
+                Text(
+                    "Эксперимент: это сворачивает интерфейс AdReverse. MAX открывает рекламу в собственном окне, " +
+                        "поэтому наличие PiP у приложения само по себе не переносит рекламное видео.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
 
                 OutlinedButton(
                     onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
@@ -253,7 +324,6 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
         }
         state.message?.let { Text(it, color = Color(0xFF9DDCB1)) }
 
-        // Keep account logout away from the upper-right corner, where ad close controls appear.
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
             onClick = vm::logout,
