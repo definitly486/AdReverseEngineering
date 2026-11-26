@@ -1,0 +1,99 @@
+name: Android debug APK
+
+on:
+  push:
+    branches: [app]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout app branch
+        uses: actions/checkout@v4
+        with:
+          ref: app
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Locate Android Gradle project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrapper="$(find . -type f -name gradlew -not -path './.git/*' -print -quit)"
+          if [[ -z "$wrapper" ]]; then
+            echo "::error::No gradlew found. Add the Android Gradle project and its Gradle wrapper to this branch."
+            exit 1
+          fi
+          project_dir="$(dirname "$wrapper")"
+          chmod +x "$wrapper"
+          echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
+          echo "wrapper=$wrapper" >> "$GITHUB_OUTPUT"
+          echo "Using Gradle project at: $project_dir"
+
+      - name: Build debug APK
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Sign APK with the persistent project debug key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_KEYSTORE_BASE64:?Missing GitHub Secret ANDROID_KEYSTORE_BASE64}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing GitHub Secret ANDROID_KEYSTORE_PASSWORD}"
+          : "${ANDROID_KEY_ALIAS:?Missing GitHub Secret ANDROID_KEY_ALIAS}"
+          : "${ANDROID_KEY_PASSWORD:?Missing GitHub Secret ANDROID_KEY_PASSWORD}"
+
+          build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)"
+          test -x "$build_tools/zipalign"
+          test -x "$build_tools/apksigner"
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/project-debug.keystore"
+          mkdir -p dist
+          mapfile -t apks < <(find . -type f -path '*/build/outputs/apk/*' -name '*debug*.apk' -not -path '*/androidTest/*' | sort)
+          if (( ${#apks[@]} == 0 )); then
+            echo "::error::Gradle completed but no debug APK was found."
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            name="$(basename "$apk")"
+            aligned="$RUNNER_TEMP/aligned-$name"
+            output="dist/$name"
+            "$build_tools/zipalign" -f -p 4 "$apk" "$aligned"
+            "$build_tools/apksigner" sign \
+              --ks "$RUNNER_TEMP/project-debug.keystore" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:ANDROID_KEY_PASSWORD \
+              --out "$output" "$aligned"
+            "$build_tools/apksigner" verify --verbose "$output"
+          done
+
+          rm -f "$RUNNER_TEMP/project-debug.keystore"
+
+      - name: Upload signed debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdReverseEngineering-debug-apk
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
