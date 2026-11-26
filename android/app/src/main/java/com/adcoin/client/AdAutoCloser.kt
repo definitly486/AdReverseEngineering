@@ -5,19 +5,23 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import java.util.concurrent.Executors
 
+/**
+ * Starts looking for the close control only after MAX confirms the reward.
+ * It never sends BACK and never finishes a third-party Activity.
+ */
 class AdAutoCloser(
     private val app: Application,
     private val onLog: (String) -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
-    private val io = Executors.newSingleThreadExecutor()
     private var adActivity: Activity? = null
     private var tick: Runnable? = null
+    private var clickedInActivity = false
+
+    private val prefs get() = app.getSharedPreferences(PREFS, 0)
 
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(a: Activity) {
@@ -33,75 +37,82 @@ class AdAutoCloser(
 
     init { app.registerActivityLifecycleCallbacks(lifecycle) }
 
-    fun startAfterReward(delayMs: Long = 1_500, timeoutMs: Long = 30_000) {
+    fun startAfterReward(delayMs: Long = 300, timeoutMs: Long = 120_000) {
         stop()
-        val t0 = System.currentTimeMillis()
+        clickedInActivity = false
+        prefs.edit().putBoolean(KEY_ACTIVE, true).putLong(KEY_LAST_CLICK, 0L).apply()
+        val startedAt = System.currentTimeMillis()
+        onLog("ожидаю появления кнопки закрытия.")
         val r = object : Runnable {
             override fun run() {
-                val a = adActivity ?: return
-                if (a.isFinishing) return
-                val elapsed = System.currentTimeMillis() - t0
-                if (elapsed > timeoutMs) {
-                    onLog("таймаут — оставляю рекламу пользователю.")
+                if (!prefs.getBoolean(KEY_ACTIVE, false)) return
+                val elapsed = System.currentTimeMillis() - startedAt
+                if (elapsed >= timeoutMs) {
+                    onLog("кнопка закрытия не найдена; рекламу не принудительно закрываю.")
+                    stop()
                     return
                 }
-                if (tryClickClose(a)) { onLog("нажат close в рекламе."); return }
-                if (elapsed > timeoutMs / 2 && injectBack()) {
-                    onLog("отправил BACK.")
+                val a = adActivity
+                if (a != null && !a.isFinishing && !clickedInActivity) {
+                    val candidate = a.window?.decorView?.let(::findCloseView)
+                    if (candidate != null && candidate.isEnabled) {
+                        candidate.performClick()
+                        clickedInActivity = true
+                        onLog("обнаружена кнопка закрытия в окне рекламы; проверяю закрытие.")
+                    }
                 }
-                if (elapsed > timeoutMs - 4_000) {
-                    onLog("finish() активити рекламы.")
-                    a.finish()
-                    return
-                }
-                main.postDelayed(this, 500)
+                main.postDelayed(this, 400)
             }
         }
         tick = r
         main.postDelayed(r, delayMs)
     }
 
-    fun stop() { tick?.let { main.removeCallbacks(it) }; tick = null }
-    fun dispose() { stop(); app.unregisterActivityLifecycleCallbacks(lifecycle) }
+    fun stop() {
+        tick?.let(main::removeCallbacks)
+        tick = null
+        prefs.edit().putBoolean(KEY_ACTIVE, false).apply()
+    }
 
-    private fun tryClickClose(a: Activity): Boolean {
-        val decor = a.window?.decorView ?: return false
-        val v = findCloseView(decor) ?: return false
-        if (!v.isEnabled) return false
-        v.performClick()
-        return true
+    fun dispose() {
+        stop()
+        app.unregisterActivityLifecycleCallbacks(lifecycle)
     }
 
     private fun findCloseView(root: View): View? {
-        val q = ArrayDeque<View>(); q.add(root)
-        val w = root.width.toFloat(); val h = root.height.toFloat()
-        while (q.isNotEmpty()) {
-            val v = q.removeFirst()
-            if (v !== root && v.visibility == View.VISIBLE && v.isClickable &&
-                v.width in 1..170 && v.height in 1..170) {
-                val loc = IntArray(2); v.getLocationInWindow(loc)
-                val res = runCatching { v.resources.getResourceEntryName(v.id) }
+        val queue = ArrayDeque<View>()
+        queue.add(root)
+        val rootWidth = root.width.toFloat()
+        val rootHeight = root.height.toFloat()
+        while (queue.isNotEmpty()) {
+            val view = queue.removeFirst()
+            if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
+                view.isEnabled && view.width in 1..180 && view.height in 1..180) {
+                val location = IntArray(2)
+                view.getLocationInWindow(location)
+                val id = runCatching { view.resources.getResourceEntryName(view.id) }
                     .getOrNull()?.lowercase().orEmpty()
-                val desc = v.contentDescription?.toString()?.lowercase().orEmpty()
-                val hit = res.contains("close") || res.contains("skip") ||
-                    desc.contains("close") || desc.contains("skip") ||
-                    desc.contains("закрыть") || desc.contains("пропустить") ||
-                    (loc[0] > w * 0.72f && loc[1] < h * 0.18f)
-                if (hit) return v
+                val description = view.contentDescription?.toString()?.lowercase().orEmpty()
+                val label = (id + " " + description).replace('_', ' ')
+                val explicitClose = listOf(
+                    "close", "dismiss", "skip", "закрыть", "пропустить"
+                ).any(label::contains)
+                val topRightSmallControl = rootWidth > 0 && rootHeight > 0 &&
+                    location[0] > rootWidth * 0.78f &&
+                    location[1] < rootHeight * 0.22f &&
+                    view.width <= 96 && view.height <= 96
+                if (explicitClose || topRightSmallControl) return view
             }
-            if (v is ViewGroup) for (i in 0 until v.childCount) q.add(v.getChildAt(i))
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) queue.add(view.getChildAt(i))
+            }
         }
         return null
     }
 
-    private fun injectBack(): Boolean = runCatching {
-        io.execute {
-            val at = Class.forName("android.app.ActivityThread")
-            val cur = at.getMethod("currentActivityThread").invoke(null)
-            val instr = at.getMethod("getInstrumentation").invoke(cur)
-            instr.javaClass.getMethod("sendKeyDownUpSync", Int::class.javaPrimitiveType)
-                .invoke(instr, KeyEvent.KEYCODE_BACK)
-        }
-        true
-    }.getOrDefault(false)
+    companion object {
+        const val PREFS = "ad_auto_close"
+        const val KEY_ACTIVE = "waiting_for_close"
+        const val KEY_LAST_CLICK = "last_accessibility_click"
+    }
 }
