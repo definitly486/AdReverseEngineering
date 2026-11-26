@@ -210,6 +210,18 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     )
                 }
 
+                OutlinedButton(
+                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Настроить автозакрытие (Специальные возможности)")
+                }
+                Text(
+                    "Включите службу в настройках Android. Она ищет кнопку закрытия только после сигнала о награде MAX.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.LightGray
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
