@@ -14,6 +14,8 @@ import android.view.accessibility.AccessibilityNodeInfo
  * It searches for an actual close control (X / close / dismiss), never CTA buttons.
  */
 class AdCloseAccessibilityService : AccessibilityService() {
+    private var lastTreeDumpAt = 0L
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "accessibility service connected")
@@ -58,6 +60,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
             return
         }
 
+        if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
+            lastTreeDumpAt = now
+            Log.i(TAG, "TREE_DIAG expected=$expectedPackage eventPackage=${event.packageName} roots=${roots.size} activeRootPackage=${rootInActiveWindow?.packageName}")
+            roots.forEach { dumpTree(it) }
+        }
+
         for (root in roots) {
             val target = findCloseNode(root) ?: continue
             val rect = Rect().also(target::getBoundsInScreen)
@@ -71,6 +79,23 @@ class AdCloseAccessibilityService : AccessibilityService() {
             if (clicked) return
         }
         Log.v(TAG, "armed; no X control in accessibility tree (package=${event.packageName}, event=${event.eventType})")
+    }
+
+    /** Diagnostic only: records the actual exposed accessibility nodes; never clicks them. */
+    private fun dumpTree(root: AccessibilityNodeInfo) {
+        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
+        queue.add(root to 0)
+        var count = 0
+        while (queue.isNotEmpty() && count < MAX_DIAGNOSTIC_NODES) {
+            val (node, depth) = queue.removeFirst()
+            val bounds = Rect().also(node::getBoundsInScreen)
+            Log.i(TAG, "TREE_NODE depth=$depth pkg=${node.packageName} class=${node.className} text=${node.text} desc=${node.contentDescription} id=${node.viewIdResourceName} click=${node.isClickable} enabled=${node.isEnabled} visible=${node.isVisibleToUser} bounds=$bounds")
+            count++
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { queue.add(it to depth + 1) }
+            }
+        }
+        Log.i(TAG, "TREE_DIAG_END nodes=$count truncated=${queue.isNotEmpty()}")
     }
 
     private fun findCloseNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -159,6 +184,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "AdCoin.AccessClose"
         private const val CLICK_COOLDOWN_MS = 1_200L
+        private const val TREE_DUMP_INTERVAL_MS = 2_000L
+        private const val MAX_DIAGNOSTIC_NODES = 100
         private val AD_CTA_WORDS = listOf(
             "google play", "play store", "install", "open", "download",
             "get the app", "get app", "learn more", "shop now",
