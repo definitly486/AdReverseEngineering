@@ -150,10 +150,7 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("AdCoin", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = vm::logout) { Text("Выйти") }
-        }
+        Text("AdCoin", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
                 Text("Баланс", color = Color.LightGray)
@@ -255,5 +252,12 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
             if (state.loading) CircularProgressIndicator()
         }
         state.message?.let { Text(it, color = Color(0xFF9DDCB1)) }
+
+        // Keep account logout away from the upper-right corner, where ad close controls appear.
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = vm::logout,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Выйти из аккаунта") }
     }
 }
