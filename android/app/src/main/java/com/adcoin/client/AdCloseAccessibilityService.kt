@@ -10,8 +10,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Opt-in helper. Armed only while a MAX ad is displayed. It searches for a
- * close/dismiss control and never clicks install/learn-more/skip controls.
+ * Opt-in helper. Armed only while a MAX ad is displayed.
+ * It searches for an actual close control (X / close / dismiss), never CTA buttons.
  */
 class AdCloseAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
@@ -28,9 +28,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
-        val activeRoot = rootInActiveWindow
         val roots = ArrayList<AccessibilityNodeInfo>()
-        if (activeRoot != null) roots.add(activeRoot)
+        rootInActiveWindow?.let(roots::add)
         runCatching {
             windows.forEach { window -> window.root?.let(roots::add) }
         }.onFailure { Log.w(TAG, "cannot enumerate windows", it) }
@@ -40,14 +39,14 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val rect = Rect().also(target::getBoundsInScreen)
             val label = describe(target)
             val clicked = clickNodeOrParent(target) || tapCenter(rect)
-            Log.i(TAG, "close candidate: label=$label bounds=$rect clicked=$clicked")
+            Log.i(TAG, "X candidate: package=${event.packageName} label=$label bounds=$rect clicked=$clicked")
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "candidate=$label clicked=$clicked")
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "X candidate=$label clicked=$clicked")
                 .apply()
             if (clicked) return
         }
-        Log.v(TAG, "armed; no close control in accessibility tree (event=${event.eventType})")
+        Log.v(TAG, "armed; no X control in accessibility tree (package=${event.packageName}, event=${event.eventType})")
     }
 
     private fun findCloseNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -57,8 +56,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val node = queue.removeFirst()
             if (node.isVisibleToUser && node.isEnabled) {
                 val label = describe(node)
-                val explicit = CLOSE_WORDS.any(label::contains) ||
-                    label.trim() in setOf("x", "×", "✕", "✖")
+                val explicit = CLOSE_WORDS.any(label::contains) || hasXGlyph(node)
                 val rect = Rect().also(node::getBoundsInScreen)
                 val density = resources.displayMetrics.density
                 val maxSize = (96 * density).toInt()
@@ -66,18 +64,28 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 val topRight = rect.right >= resources.displayMetrics.widthPixels * 0.78f &&
                     rect.top <= resources.displayMetrics.heightPixels * 0.22f
                 val className = node.className?.toString().orEmpty()
-                val iconButton = node.isClickable && small && topRight &&
-                    (className.contains("ImageButton", true) ||
-                     className.contains("Button", true) ||
-                     className.contains("ImageView", true))
-                if ((explicit || iconButton) &&
-                    (node.isClickable || hasClickableParent(node))) return node
+                val iconClass = className.contains("ImageButton", true) ||
+                    className.contains("Button", true) ||
+                    className.contains("ImageView", true)
+                // Some ad SDKs expose the X image as a non-clickable child of a clickable container.
+                val clickable = node.isClickable || hasClickableParent(node)
+                val smallTopRightIcon = small && topRight && iconClass && clickable
+                if ((explicit || smallTopRightIcon) && clickable) return node
             }
-            for (i in 0 until node.childCount) {
-                node.getChild(i)?.let(queue::add)
-            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
         }
         return null
+    }
+
+    private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
+        val candidates = listOf(
+            node.text?.toString(),
+            node.contentDescription?.toString(),
+            node.viewIdResourceName
+        )
+        return candidates.any { raw ->
+            raw?.trim()?.lowercase() in X_GLYPHS
+        }
     }
 
     private fun describe(node: AccessibilityNodeInfo): String =
@@ -90,7 +98,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     private fun hasClickableParent(node: AccessibilityNodeInfo): Boolean {
         var parent = node.parent
-        repeat(4) {
+        repeat(5) {
             if (parent == null) return false
             if (parent.isClickable && parent.isEnabled) return true
             parent = parent.parent
@@ -102,7 +110,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         if (node.isClickable && node.isEnabled &&
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
         var parent = node.parent
-        repeat(4) {
+        repeat(5) {
             if (parent == null) return false
             if (parent.isClickable && parent.isEnabled &&
                 parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
@@ -124,7 +132,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AdCoin.AccessClose"
-        private const val CLICK_COOLDOWN_MS = 900L
+        private const val CLICK_COOLDOWN_MS = 1_200L
         private val CLOSE_WORDS = listOf("close", "dismiss", "закрыть")
+        private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗")
     }
 }
