@@ -61,6 +61,7 @@ class AdAutoCloser(
             .putBoolean(KEY_ACTIVE, true)
             .putLong("armed_at", SystemClock.elapsedRealtime())
             .putLong(KEY_LAST_CLICK, 0L)
+            .putBoolean("close_control_clicked", false)
             .putString(KEY_AD_PACKAGE, adPackageName)
             .putString(KEY_LAST_RESULT, "read-only diagnostics active; no taps")
             .apply()
