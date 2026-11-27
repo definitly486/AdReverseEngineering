@@ -124,19 +124,17 @@ class AdCloseAccessibilityService : AccessibilityService() {
             // Все найденные цели в верхнем правом углу окна отфильтруем ниже.
 
 
-            val rootBounds = Rect().also(root::getBoundsInScreen)
-            val closeZoneWidth = (rootBounds.width() * 0.12f).toInt()
-            val closeZoneHeight = (rootBounds.height() * 0.12f).toInt()
-            val maxCloseControlSize = (minOf(rootBounds.width(), rootBounds.height()) * 0.18f)
-                .toInt().coerceIn(24, 120)
+            val closeBounds = rightResult?.first?.let { Rect().also(it::getBoundsInScreen) }
             val filteredTargets = tapTargets.filterNot { target ->
-                val smallControl = target.width() in 1..maxCloseControlSize &&
-                        target.height() in 1..maxCloseControlSize
-                val atTopRight = target.right >= rootBounds.right - closeZoneWidth &&
-                        target.top <= rootBounds.top + closeZoneHeight
-                val exclude = smallControl && atTopRight
-                if (exclude) Log.i(TAG, "excluded small-window close control bounds=$target")
-                exclude
+                // Исключаем только сам найденный X (или маленькую кликабельную
+                // область, центр которой попадает внутрь bounds узла X).
+                // Не фильтруем всю верхнюю правую часть окна: это могло задеть
+                // обычные цели, собранные поиском от левого верхнего угла.
+                val isCloseControl = closeBounds != null && !closeBounds.isEmpty &&
+                        target.width() <= 120 && target.height() <= 120 &&
+                        closeBounds.contains(target.exactCenterX().toInt(), target.exactCenterY().toInt())
+                if (isCloseControl) Log.i(TAG, "excluded identified X control bounds=$target xBounds=$closeBounds")
+                isCloseControl
             }
             val uniqueTargets = filteredTargets.distinctBy { it.flattenToString() }
             if (uniqueTargets.isEmpty()) {
