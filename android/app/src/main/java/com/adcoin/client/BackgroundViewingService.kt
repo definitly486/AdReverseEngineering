@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 
 /**
@@ -17,6 +18,8 @@ import android.util.Log
  * be driven by this service.
  */
 class BackgroundViewingService : Service() {
+
+    private var modeWakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -28,6 +31,8 @@ class BackgroundViewingService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+
+        applyScreenPowerMode()
 
         val notification = buildNotification()
         try {
@@ -56,8 +61,49 @@ class BackgroundViewingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        releaseModeWakeLock()
         super.onDestroy()
         Log.i(TAG, "background session service stopped")
+    }
+
+    /**
+     * DIM keeps the display awake at Android's dim brightness.
+     * SCREEN_OFF allows the normal display timeout or power button to turn the
+     * panel off while a partial wake lock keeps the session process runnable.
+     * MAX ad playback still requires its Activity and may pause until unlock.
+     */
+    @Suppress("DEPRECATION")
+    private fun applyScreenPowerMode() {
+        releaseModeWakeLock()
+        val powerManager = getSystemService(PowerManager::class.java)
+        val mode = sessionPrefs().getString(KEY_SCREEN_MODE, SCREEN_MODE_DIM)
+        val wakeLock = when (mode) {
+            SCREEN_MODE_OFF -> powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "${packageName}:FreeformScreenOff"
+            )
+            else -> powerManager.newWakeLock(
+                PowerManager.SCREEN_DIM_WAKE_LOCK,
+                "${packageName}:FreeformDimScreen"
+            )
+        }
+        try {
+            wakeLock.setReferenceCounted(false)
+            wakeLock.acquire()
+            modeWakeLock = wakeLock
+            Log.i(TAG, "Screen power mode applied: ${mode ?: SCREEN_MODE_DIM}")
+        } catch (error: Exception) {
+            Log.e(TAG, "Could not acquire mode wake lock", error)
+            runCatching { if (wakeLock.isHeld) wakeLock.release() }
+        }
+    }
+
+    private fun releaseModeWakeLock() {
+        modeWakeLock?.let { wakeLock ->
+            runCatching { if (wakeLock.isHeld) wakeLock.release() }
+                .onFailure { Log.w(TAG, "Could not release mode wake lock", it) }
+        }
+        modeWakeLock = null
     }
 
     private fun buildNotification(): Notification {
@@ -110,6 +156,9 @@ class BackgroundViewingService : Service() {
         const val PREFS_NAME = "adreverse_background_session"
         const val KEY_INFINITE_MODE = "infinite_mode"
         const val KEY_VIDEOS_COMPLETED = "videos_completed"
+        const val KEY_SCREEN_MODE = "screen_power_mode"
+        const val SCREEN_MODE_DIM = "dim"
+        const val SCREEN_MODE_OFF = "screen_off"
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, BackgroundViewingService::class.java)
