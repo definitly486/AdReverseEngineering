@@ -31,6 +31,7 @@ import java.io.File
 
 private const val TAG = "AdCoin"
 private const val SHIZUKU_REQUEST_CODE = 4107
+private const val SHIZUKU_STATS_REQUEST_CODE = 4108
 
 class MainActivity : ComponentActivity() {
 
@@ -47,9 +48,12 @@ class MainActivity : ComponentActivity() {
 
     private val shizukuPermissionListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-            if (requestCode == SHIZUKU_REQUEST_CODE) {
+            if (requestCode == SHIZUKU_REQUEST_CODE ||
+                requestCode == SHIZUKU_STATS_REQUEST_CODE
+            ) {
                 if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                    launchInFreeform()
+                    if (requestCode == SHIZUKU_REQUEST_CODE) launchInFreeform()
+                    else launchStatsInFreeform()
                 } else {
                     showToast("Разрешение Shizuku не предоставлено")
                 }
@@ -79,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 onOpenAccessibilitySettings = ::openAccessibilitySettings,
                 onDismissAccessibilityWarning = { showAccessibilityWarning.value = false },
                 onLaunchFreeform = ::requestFreeformLaunch,
+                onOpenStatsWindow = ::requestStatsWindow,
                 vm = vm
             )
         }
@@ -226,6 +231,51 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestStatsWindow() {
+        if (!Shizuku.pingBinder()) {
+            showToast("Для отдельного окна статистики нужен запущенный Shizuku")
+            return
+        }
+        try {
+            when (Shizuku.checkSelfPermission()) {
+                PackageManager.PERMISSION_GRANTED -> launchStatsInFreeform()
+                else -> Shizuku.requestPermission(SHIZUKU_STATS_REQUEST_CODE)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось запросить Shizuku для окна статистики", e)
+            showToast("Ошибка Shizuku: ${e.message ?: "неизвестная ошибка"}")
+        }
+    }
+
+    private fun launchStatsInFreeform() {
+        Thread {
+            try {
+                if (!Shizuku.pingBinder() ||
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
+                ) {
+                    runOnUiThread { showToast("Shizuku отключён или разрешение отозвано") }
+                    return@Thread
+                }
+                val command = """
+                    settings put global enable_freeform_support 1
+                    settings put global force_resizable_activities 1
+                    am start --windowingMode 5 --activity-new-task -n com.pavloffmedev.dcn/com.adcoin.client.StatsActivity
+                """.trimIndent()
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val exitCode = process.waitFor()
+                Log.i(TAG, "Stats Freeform command exit=$exitCode output=$output")
+                runOnUiThread {
+                    if (exitCode == 0) showToast("Окно статистики открыто")
+                    else showToast("Не удалось открыть статистику: $output")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка запуска окна статистики", e)
+                runOnUiThread { showToast("Ошибка окна статистики: ${e.message ?: "неизвестная ошибка"}") }
+            }
+        }.start()
+    }
+
     private fun launchInFreeform() {
         Thread {
             try {
@@ -328,6 +378,7 @@ private fun AdCoinApp(
     onOpenAccessibilitySettings: () -> Unit,
     onDismissAccessibilityWarning: () -> Unit,
     onLaunchFreeform: () -> Unit,
+    onOpenStatsWindow: () -> Unit,
     vm: AdCoinViewModel
 ) {
     val state by vm.state.collectAsState()
@@ -372,7 +423,8 @@ private fun AdCoinApp(
                 onEnterPip = onEnterPip,
                 onExitPip = onExitPip,
                 isActivityResumed = isActivityResumed,
-                onLaunchFreeform = onLaunchFreeform
+                onLaunchFreeform = onLaunchFreeform,
+                onOpenStatsWindow = onOpenStatsWindow
             )
         } else {
             LoginScreen(vm = vm)
@@ -425,7 +477,8 @@ private fun DashboardScreen(
     onEnterPip: (File?) -> Unit,
     onExitPip: () -> Unit,
     isActivityResumed: Boolean,
-    onLaunchFreeform: () -> Unit
+    onLaunchFreeform: () -> Unit,
+    onOpenStatsWindow: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -499,6 +552,15 @@ private fun DashboardScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Запустить в Freeform")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onOpenStatsWindow,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Открыть окно статистики")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
