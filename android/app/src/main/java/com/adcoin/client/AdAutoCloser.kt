@@ -9,9 +9,9 @@ import android.os.SystemClock
 import android.util.Log
 
 /**
- * Tracks the MAX ad Activity and exposes its package to the read-only
- * AccessibilityService diagnostics. It intentionally never clicks Views,
- * dispatches gestures, presses BACK, or closes the ad.
+ * Tracks the MAX ad Activity and exposes its package to the AccessibilityService.
+ * The service may click an explicit ad close control, but never an advertiser CTA,
+ * dispatches gestures, or presses BACK.
  */
 class AdAutoCloser(
     private val app: Application,
@@ -63,12 +63,12 @@ class AdAutoCloser(
             .putLong(KEY_LAST_CLICK, 0L)
             .putBoolean("close_control_clicked", false)
             .putString(KEY_AD_PACKAGE, adPackageName)
-            .putString(KEY_LAST_RESULT, "read-only diagnostics active; no taps")
+            .putString(KEY_LAST_RESULT, "ad control inspection active; only explicit close controls may be clicked")
             .apply()
 
         val startedAt = SystemClock.elapsedRealtime()
-        onLog("реклама открыта; включена только диагностика, нажатия отключены.")
-        Log.i(TAG, "read-only ad diagnostics started; no View clicks or gestures")
+        onLog("реклама открыта; поиск Google Play и кнопки закрытия активирован.")
+        Log.i(TAG, "ad control inspection started; only explicit close control clicks are allowed")
         val watcher = object : Runnable {
             override fun run() {
                 if (!prefs.getBoolean(KEY_ACTIVE, false)) return
