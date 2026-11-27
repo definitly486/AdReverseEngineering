@@ -39,6 +39,17 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     private val backgroundPrefs = application.getSharedPreferences(
         BackgroundViewingService.PREFS_NAME, Application.MODE_PRIVATE
     )
+    private val serverStatsPrefs = application.getSharedPreferences(
+        "adreverse_server_stats", Application.MODE_PRIVATE
+    )
+
+    private fun persistServerStats(wallet: WalletSnapshot) {
+        val editor = serverStatsPrefs.edit()
+            .putLong("updated_at", System.currentTimeMillis())
+        wallet.dailyProgress?.let { editor.putInt("daily_progress", it) }
+        wallet.dailyTarget?.let { editor.putInt("daily_target", it) }
+        editor.apply()
+    }
     // Snapshot taken when MAX actually starts displaying an ad. A reward is
     // considered confirmed only when the AdCoin API reports a higher balance.
     private var balanceBeforeCurrentAd: Double? = null
@@ -116,6 +127,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             runCatching { api.wallet() }
                 .onSuccess { wallet ->
                     store.updateUserId(wallet.userId)
+                    persistServerStats(wallet)
                     _state.value = _state.value.copy(
                         loading = false,
                         userId = wallet.userId ?: store.userId(),
@@ -229,6 +241,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 if (result != null) {
                     lastRefreshSucceeded = true
                     store.updateUserId(result.userId)
+                    persistServerStats(result)
                     val next = result.balance
                     _state.value = _state.value.copy(
                         balance = next ?: _state.value.balance,
@@ -282,6 +295,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             .apply()
         BackgroundViewingService.stop(getApplication())
         store.clear()
+        serverStatsPrefs.edit().clear().apply()
         _state.value = ClientState()
     }
 }
