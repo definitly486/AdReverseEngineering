@@ -5,9 +5,12 @@ import json, sys, uuid
 from pathlib import Path
 from typing import Any
 import requests
-from PySide6.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Qt, QUrl
 from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QHBoxLayout,
-    QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget)
+    QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+    QFileDialog, QListWidget, QInputDialog, QSlider)
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimediaWidgets import QVideoWidget
 
 API = "https://api.adcoinapp.com"
 STATE = Path.home() / ".config" / "adcoin" / "session.json"
@@ -111,6 +114,39 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("AdCoin — Linux"); self.setMinimumSize(560, 360)
         self.session = load_session(); self.thread = None
         self.heading = QLabel("AdCoin")
+        # Video playback is independent from account balance and rewards.
+        self.player = QMediaPlayer(self)
+        self.audio = QAudioOutput(self)
+        self.player.setAudioOutput(self.audio)
+        self.video = QVideoWidget(self)
+        self.video.setMinimumHeight(280)
+        self.player.setVideoOutput(self.video)
+        self.playlist = QListWidget()
+        self.playlist.itemDoubleClicked.connect(self.play_selected)
+        self.video_status = QLabel("Добавьте видеофайлы или URL видеороликов.")
+        self.video_status.setWordWrap(True)
+        self.open_videos_button = QPushButton("Добавить файлы")
+        self.add_url_button = QPushButton("Добавить URL")
+        self.play_button = QPushButton("Воспроизвести")
+        self.pause_button = QPushButton("Пауза")
+        self.next_button = QPushButton("Следующий")
+        self.volume = QSlider(Qt.Orientation.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(70)
+        self.audio.setVolume(0.7)
+        self.seek = QSlider(Qt.Orientation.Horizontal)
+        self.seek.setRange(0, 0)
+        self.open_videos_button.clicked.connect(self.add_video_files)
+        self.add_url_button.clicked.connect(self.add_video_url)
+        self.play_button.clicked.connect(self.play_selected)
+        self.pause_button.clicked.connect(self.player.pause)
+        self.next_button.clicked.connect(self.play_next)
+        self.volume.valueChanged.connect(lambda value: self.audio.setVolume(value / 100))
+        self.seek.sliderMoved.connect(self.player.setPosition)
+        self.player.positionChanged.connect(self.update_position)
+        self.player.durationChanged.connect(self.update_duration)
+        self.player.mediaStatusChanged.connect(self.on_media_status)
+        self.player.errorOccurred.connect(self.on_player_error)
         self.heading.setStyleSheet("font-size: 26px; font-weight: 700;")
         self.status = QLabel()
         self.balance, self.earnings, self.withdrawal = QLabel("Баланс: —"), QLabel("Заработано: —"), QLabel("Доступно к выводу: —")
@@ -121,11 +157,82 @@ class MainWindow(QMainWindow):
         actions = QHBoxLayout()
         for button in (self.refresh_button, self.login_button, self.logout_button): actions.addWidget(button)
         layout = QVBoxLayout()
-        for widget in (self.heading, self.status, self.balance, self.earnings, self.withdrawal): layout.addWidget(widget)
+        for widget in (self.heading, self.video, self.video_status, self.playlist, self.seek):
+            layout.addWidget(widget)
+        video_actions = QHBoxLayout()
+        for button in (self.open_videos_button, self.add_url_button, self.play_button,
+                       self.pause_button, self.next_button):
+            video_actions.addWidget(button)
+        video_actions.addWidget(QLabel("Громкость"))
+        video_actions.addWidget(self.volume)
+        layout.addLayout(video_actions)
+        layout.addWidget(self.status)
+        for widget in (self.balance, self.earnings, self.withdrawal): layout.addWidget(widget)
         layout.addStretch(); layout.addLayout(actions)
         root = QWidget(); root.setLayout(layout); self.setCentralWidget(root)
         self.apply_session()
         if self.session.get("access_token"): self.refresh()
+
+
+    def add_video_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Выберите видеоролики", str(Path.home()),
+            "Видео (*.mp4 *.mkv *.webm *.avi *.mov *.m4v *.ogv);;Все файлы (*)")
+        for path in paths:
+            self.playlist.addItem(path)
+        if paths and self.playlist.currentRow() < 0:
+            self.playlist.setCurrentRow(0)
+        self.video_status.setText(f"В списке видео: {self.playlist.count()}")
+
+    def add_video_url(self):
+        url, accepted = QInputDialog.getText(
+            self, "Добавить видео по ссылке", "HTTP(S) URL видеоролика:")
+        url = url.strip()
+        if not accepted or not url:
+            return
+        parsed = QUrl(url)
+        if parsed.scheme() not in ("http", "https"):
+            QMessageBox.warning(self, "Некорректная ссылка", "Поддерживаются только HTTP и HTTPS URL.")
+            return
+        self.playlist.addItem(url)
+        self.playlist.setCurrentRow(self.playlist.count() - 1)
+        self.play_selected()
+
+    def play_selected(self, *_):
+        row = self.playlist.currentRow()
+        if row < 0 and self.playlist.count():
+            row = 0
+            self.playlist.setCurrentRow(row)
+        if row < 0:
+            self.video_status.setText("Сначала добавьте видеофайл или URL.")
+            return
+        source = self.playlist.item(row).text()
+        url = QUrl.fromLocalFile(source) if Path(source).exists() else QUrl(source)
+        self.player.setSource(url)
+        self.player.play()
+        self.video_status.setText(f"Воспроизведение: {source}")
+
+    def play_next(self):
+        if not self.playlist.count():
+            return
+        row = (self.playlist.currentRow() + 1) % self.playlist.count()
+        self.playlist.setCurrentRow(row)
+        self.play_selected()
+
+    def update_position(self, position):
+        if not self.seek.isSliderDown():
+            self.seek.setValue(position)
+
+    def update_duration(self, duration):
+        self.seek.setRange(0, duration)
+
+    def on_media_status(self, status):
+        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self.play_next()
+
+    def on_player_error(self, error, message):
+        if error != QMediaPlayer.Error.NoError:
+            self.video_status.setText(f"Ошибка воспроизведения: {message}")
 
     def apply_session(self):
         self.status.setText(f"Выполнен вход: {self.session.get('email', 'аккаунт')}" if self.session.get("access_token") else "Не выполнен вход")
