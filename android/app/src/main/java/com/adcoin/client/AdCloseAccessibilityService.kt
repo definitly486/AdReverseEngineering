@@ -112,14 +112,21 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
             val radiusPx = (10f * resources.displayMetrics.densityDpi / 2.54f).toInt()
             val tapTargets = mutableListOf<Rect>()
-            leftResult?.first?.let { collectClickableTargetsInRadius(it, root, radiusPx, tapTargets) }
-            rightResult?.first?.let { collectClickableTargetsInRadius(it, root, radiusPx, tapTargets) }
-
-            // Если в радиусе нет clickable-узлов (например, X нарисована как ImageView),
-            // всё равно отправляем координатный тап в центр найденного визуального элемента.
-            if (tapTargets.isEmpty()) {
-                leftResult?.first?.let { Rect().also(it::getBoundsInScreen).takeUnless(Rect::isEmpty)?.let(tapTargets::add) }
-                rightResult?.first?.let { Rect().also(it::getBoundsInScreen).takeUnless(Rect::isEmpty)?.let(tapTargets::add) }
+            // Каждый угол обрабатывается независимо: если у X нет clickable-узлов,
+            // это не должно мешать координатному тапу по найденному ImageView.
+            leftResult?.first?.let { anchor ->
+                val before = tapTargets.size
+                collectClickableTargetsInRadius(anchor, root, radiusPx, tapTargets)
+                if (tapTargets.size == before) {
+                    Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
+                }
+            }
+            rightResult?.first?.let { anchor ->
+                val before = tapTargets.size
+                collectClickableTargetsInRadius(anchor, root, radiusPx, tapTargets)
+                if (tapTargets.size == before) {
+                    Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
+                }
             }
             val uniqueTargets = tapTargets.distinctBy { it.flattenToString() }
             if (uniqueTargets.isEmpty()) continue
@@ -491,7 +498,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.28f)
             .toInt()
             .coerceIn(36, 200)
-        val sizeOk = nodeRect.width() in 16..maxSize && nodeRect.height() in 16..maxSize
+        val sizeOk = nodeRect.width() in 8..maxSize && nodeRect.height() in 8..maxSize
 
         return nearRight && nearTop && sizeOk
     }
