@@ -26,6 +26,7 @@ data class ClientState(
     // Infinite view mode
     val infiniteMode: Boolean = false,
     val videosCompleted: Int = 0,
+    val screenMode: String = BackgroundViewingService.SCREEN_MODE_DIM,
     val rewardInFlight: Boolean = false,
     val adReady: Boolean = false,
     val adHidden: Boolean = false,
@@ -59,7 +60,11 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             tokenPresent = !store.token().isNullOrBlank(),
             userId = store.userId(),
             infiniteMode = backgroundPrefs.getBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false),
-            videosCompleted = backgroundPrefs.getInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, 0)
+            videosCompleted = backgroundPrefs.getInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, 0),
+            screenMode = backgroundPrefs.getString(
+                BackgroundViewingService.KEY_SCREEN_MODE,
+                BackgroundViewingService.SCREEN_MODE_DIM
+            ) ?: BackgroundViewingService.SCREEN_MODE_DIM
         )
     )
     val state: StateFlow<ClientState> = _state.asStateFlow()
@@ -141,6 +146,28 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 .onFailure { _state.value = _state.value.copy(loading = false, message = it.message ?: "Не удалось обновить баланс") }
+        }
+    }
+
+    fun setScreenMode(mode: String) {
+        if (mode != BackgroundViewingService.SCREEN_MODE_DIM &&
+            mode != BackgroundViewingService.SCREEN_MODE_OFF
+        ) return
+
+        backgroundPrefs.edit()
+            .putString(BackgroundViewingService.KEY_SCREEN_MODE, mode)
+            .apply()
+        _state.value = _state.value.copy(
+            screenMode = mode,
+            message = if (mode == BackgroundViewingService.SCREEN_MODE_DIM) {
+                "Режим: тусклый экран. Дисплей останется включённым на минимальной яркости."
+            } else {
+                "Режим: экран может выключаться. Фоновая сессия сохраняется; показ MAX продолжится после разблокировки."
+            }
+        )
+        if (_state.value.infiniteMode) {
+            // onStartCommand re-reads the preference and swaps the wake lock.
+            BackgroundViewingService.start(getApplication())
         }
     }
 
