@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.Log
 import com.google.android.libraries.ads.mobile.sdk.MobileAds
 import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.ExperimentalApi
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
 import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAd
@@ -22,6 +23,7 @@ import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAdRequest
  * This is intentionally separate from AppLovin MAX Rewarded. Google PiP is a
  * banner format (not a rewarded video), so it never calls AdCoin reward APIs.
  */
+@OptIn(ExperimentalApi::class)
 class GooglePipAdController(
     context: Context,
     private val onStatus: (String) -> Unit
@@ -73,7 +75,7 @@ class GooglePipAdController(
         val request = PictureInPictureAdRequest.Builder(BuildConfig.GMA_PIP_AD_UNIT_ID).build()
         PictureInPictureAd.load(
             request,
-            object : AdLoadCallback<PictureInPictureAd>() {
+            object : AdLoadCallback<PictureInPictureAd> {
                 override fun onAdLoaded(ad: PictureInPictureAd) {
                     loading = false
                     pipAd = ad
