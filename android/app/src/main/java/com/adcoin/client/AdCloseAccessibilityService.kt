@@ -136,9 +136,28 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 if (isCloseControl) Log.i(TAG, "excluded identified X control bounds=$target xBounds=$closeBounds")
                 isCloseControl
             }
-            val uniqueTargets = filteredTargets.distinctBy { it.flattenToString() }
+            // Перед отправкой жеста обрезаем каждую цель границами именно
+            // маленького рекламного окна. Это не даст координатам уйти наружу,
+            // даже если Accessibility вернул bounds родительского/перекрывающего узла.
+            val windowBounds = Rect().also(root::getBoundsInScreen)
+            val insideWindowTargets = filteredTargets.mapNotNull { target ->
+                val clipped = Rect(target)
+                if (windowBounds.isEmpty || !clipped.intersect(windowBounds)) return@mapNotNull null
+                // Не нажимаем по самой рамке окна: берём точку строго внутри.
+                if (clipped.width() > 2) {
+                    clipped.left = (clipped.left + 1).coerceAtMost(clipped.right - 1)
+                    clipped.right = (clipped.right - 1).coerceAtLeast(clipped.left + 1)
+                }
+                if (clipped.height() > 2) {
+                    clipped.top = (clipped.top + 1).coerceAtMost(clipped.bottom - 1)
+                    clipped.bottom = (clipped.bottom - 1).coerceAtLeast(clipped.top + 1)
+                }
+                Log.i(TAG, "tap target clipped to window target=$target clipped=$clipped window=$windowBounds")
+                clipped
+            }
+            val uniqueTargets = insideWindowTargets.distinctBy { it.flattenToString() }
             if (uniqueTargets.isEmpty()) {
-                Log.i(TAG, "no tap targets after excluding small-window close control")
+                Log.i(TAG, "no tap targets inside small ad window after excluding close control")
                 continue
             }
 
