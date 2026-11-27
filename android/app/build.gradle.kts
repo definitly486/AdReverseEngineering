@@ -12,12 +12,6 @@ val rewardedAdUnitId = providers.gradleProperty("APPLOVIN_REWARDED_AD_UNIT_ID")
     .orElse(providers.environmentVariable("APPLOVIN_REWARDED_AD_UNIT_ID"))
     .orElse("")
     .get()
-val gmaAppId = providers.gradleProperty("GMA_APP_ID").orNull?.takeIf { it.isNotBlank() }
-    ?: providers.environmentVariable("GMA_APP_ID").orNull?.takeIf { it.isNotBlank() }
-    ?: "ca-app-pub-3940256099942544~3347511713"
-val gmaPipAdUnitId = providers.gradleProperty("GMA_PIP_AD_UNIT_ID").orNull?.takeIf { it.isNotBlank() }
-    ?: providers.environmentVariable("GMA_PIP_AD_UNIT_ID").orNull?.takeIf { it.isNotBlank() }
-    ?: "/21775744923/example/picture-in-picture"
 val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
     .orElse("1")
     .get()
@@ -39,8 +33,6 @@ android {
         manifestPlaceholders["applovinSdkKey"] = applovinSdkKey
         buildConfigField("String", "APPLOVIN_SDK_KEY", "\"$applovinSdkKey\"")
         buildConfigField("String", "APPLOVIN_REWARDED_AD_UNIT_ID", "\"$rewardedAdUnitId\"")
-        buildConfigField("String", "GMA_APP_ID", "\"$gmaAppId\"")
-        buildConfigField("String", "GMA_PIP_AD_UNIT_ID", "\"$gmaPipAdUnitId\"")
     }
 
     signingConfigs {
@@ -87,6 +79,5 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.applovin:applovin-sdk:13.7.0")
-    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.7.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
