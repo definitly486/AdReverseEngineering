@@ -14,13 +14,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.ArrayDeque
 
-/**
- * Opt-in helper. Armed only while a MAX ad is displayed.
- *
- * - Normal node search on full-screen
- * - On small windows: node search first, then blind clicks after ~5.5s
- * - Blind clicks only affect small windows (area < 45% of screen)
- */
 class AdCloseAccessibilityService : AccessibilityService() {
 
     private var lastTreeDumpAt = 0L
@@ -35,7 +28,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                 AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         serviceInfo = info
-        Log.i(TAG, "accessibility service connected, flags=${info.flags}")
+        Log.i(TAG, "accessibility service connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -59,158 +52,137 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
-        // Безопасное определение пакета
-        var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
-        if (expectedPackage.isNullOrBlank() ||
-            expectedPackage == "com.blackview.launcher" ||
-            expectedPackage == "com.android.systemui" ||
-            expectedPackage == "com.android.settings"
-        ) {
-            val eventPackage = event.packageName?.toString()
-            if (!eventPackage.isNullOrBlank() &&
-                eventPackage != "com.android.systemui" &&
-                eventPackage != "com.blackview.launcher" &&
-                eventPackage != "com.android.settings"
-            ) {
-                expectedPackage = eventPackage
-                prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
-                Log.i(TAG, "locked ad package: $expectedPackage")
-            }
-        }
-
-        val allRoots = collectAdRoots()
-        if (allRoots.isEmpty()) {
-            Log.v(TAG, "armed; no roots at all")
+        // Собираем ТОЛЬКО окна нашего приложения
+        val ourRoots = collectOurRootsOnly()
+        if (ourRoots.isEmpty()) {
+            Log.v(TAG, "armed; no our-app windows")
             return
-        }
-
-        // Только окна нашего приложения
-        val ourPackage = packageName
-        val preferredRoots = allRoots
-            .filter { root ->
-                val pkg = root.packageName?.toString()
-                pkg == ourPackage || pkg == "com.pavloffmedev.dcn"
-            }
-            .sortedBy { root ->
-                val r = Rect().also { root.getBoundsInScreen(it) }
-                r.width().toLong() * r.height()
-            }
-
-        if (preferredRoots.isEmpty()) {
-            Log.v(TAG, "armed; no our-app roots")
-            return
-        }
-
-        if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
-            lastTreeDumpAt = now
-            Log.i(TAG, "TREE_DIAG expected=$expectedPackage roots=${preferredRoots.size} " +
-                    "aggressive=${now - armedAt > AGGRESSIVE_AFTER_MS}")
-            preferredRoots.take(2).forEach { dumpTree(it) }
         }
 
         val screenArea = resources.displayMetrics.widthPixels.toLong() *
                 resources.displayMetrics.heightPixels
 
-        for (root in preferredRoots) {
-            val rootRect = Rect().also { root.getBoundsInScreen(it) }
-            val rootArea = rootRect.width().toLong() * rootRect.height()
-            val isSmallWindow = rootArea < screenArea * SMALL_WINDOW_AREA_RATIO
+        // Оставляем только маленькие окна
+        val smallRoots = ourRoots.filter { root ->
+            val r = Rect().also { root.getBoundsInScreen(it) }
+            val area = r.width().toLong() * r.height()
+            area < screenArea * SMALL_WINDOW_AREA_RATIO
+        }.sortedBy { root ->
+            val r = Rect().also { root.getBoundsInScreen(it) }
+            r.width().toLong() * r.height()
+        }
 
-            // === 1. Обычный поиск по нодам ===
+        if (smallRoots.isEmpty()) {
+            // Есть только большие окна нашего приложения — работаем обычным поиском
+            for (root in ourRoots) {
+                val result = findFirstTarget(root) ?: continue
+                handleClick(result, now, prefs)
+                return
+            }
+            return
+        }
+
+        // ===== Работаем ТОЛЬКО с маленькими окнами =====
+        if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
+            lastTreeDumpAt = now
+            Log.i(TAG, "TREE_DIAG smallRoots=${smallRoots.size} aggressive=${now - armedAt > AGGRESSIVE_AFTER_MS}")
+            smallRoots.take(1).forEach { dumpTree(it) }
+        }
+
+        for (root in smallRoots) {
+            val rootRect = Rect().also { root.getBoundsInScreen(it) }
+
+            // 1. Обычный поиск
             val result = findFirstTarget(root)
             if (result != null) {
-                val (node, isGooglePlay) = result
-                val rect = Rect().also(node::getBoundsInScreen)
-                val label = describe(node)
-
-                val clicked = clickNodeOrParent(node)
-                Log.i(TAG, "clicked: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
-                        "label=$label bounds=$rect success=$clicked")
-
-                prefs.edit()
-                    .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                    .putString(
-                        AdAutoCloser.KEY_LAST_RESULT,
-                        "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked"
-                    )
-                    .apply()
-
-                if (clicked && isGooglePlay) {
-                    mainHandler.postDelayed({
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        Log.i(TAG, "pressed BACK after Google Play click")
-                    }, 400)
-                }
+                handleClick(result, now, prefs)
                 return
             }
 
-            // === 2. Слепой клик ТОЛЬКО для маленьких окон ===
-            if (isSmallWindow && (now - armedAt) > BLIND_CLICK_AFTER_MS) {
-                Log.w(TAG, "small window blind click, bounds=$rootRect areaRatio=${rootArea.toFloat() / screenArea}")
+            // 2. Слепой клик только для маленького окна
+            if ((now - armedAt) > BLIND_CLICK_AFTER_MS) {
+                Log.w(TAG, "BLIND CLICK on small window bounds=$rootRect")
 
-                // Крестик — правый верхний угол
+                // Крестик
                 val closeX = rootRect.left + rootRect.width() * 0.90f
-                val closeY = rootRect.top + rootRect.height() * 0.12f
-                performBlindClick(closeX, closeY, "CLOSE_BLIND")
+                val closeY = rootRect.top + rootRect.height() * 0.11f
+                performBlindClick(closeX, closeY, "CLOSE")
 
-                // Через 600 мс — зона кнопки Install / Google Play
                 mainHandler.postDelayed({
+                    // Install / Google Play зона
                     val installX = rootRect.left + rootRect.width() * 0.50f
-                    val installY = rootRect.top + rootRect.height() * 0.82f
-                    performBlindClick(installX, installY, "INSTALL_BLIND")
-                }, 600)
+                    val installY = rootRect.top + rootRect.height() * 0.80f
+                    performBlindClick(installX, installY, "INSTALL")
+                }, 550)
 
                 prefs.edit().putLong(AdAutoCloser.KEY_LAST_CLICK, now).apply()
                 return
             }
         }
-
-        Log.v(TAG, "armed; nothing clickable yet")
     }
 
-    private fun collectAdRoots(): List<AccessibilityNodeInfo> {
+    private fun handleClick(
+        result: Pair<AccessibilityNodeInfo, Boolean>,
+        now: Long,
+        prefs: android.content.SharedPreferences
+    ) {
+        val (node, isGooglePlay) = result
+        val rect = Rect().also(node::getBoundsInScreen)
+        val label = describe(node)
+
+        val clicked = clickNodeOrParent(node)
+        Log.i(TAG, "clicked type=${if (isGooglePlay) "GP" else "X"} label=$label bounds=$rect success=$clicked")
+
+        prefs.edit()
+            .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
+            .putString(AdAutoCloser.KEY_LAST_RESULT, "type=${if (isGooglePlay) "GP" else "X"} clicked=$clicked")
+            .apply()
+
+        if (clicked && isGooglePlay) {
+            mainHandler.postDelayed({
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            }, 400)
+        }
+    }
+
+    /** Собирает корни ТОЛЬКО нашего приложения */
+    private fun collectOurRootsOnly(): List<AccessibilityNodeInfo> {
         val roots = mutableListOf<AccessibilityNodeInfo>()
         val seen = mutableSetOf<Int>()
+        val ourPackage = packageName
 
-        fun addRoot(node: AccessibilityNodeInfo?, source: String) {
+        fun addIfOurs(node: AccessibilityNodeInfo?, source: String) {
             if (node == null) return
             val id = System.identityHashCode(node)
             if (!seen.add(id)) return
 
             val pkg = node.packageName?.toString() ?: return
-            if (pkg == "com.android.systemui") return
+            if (pkg != ourPackage && pkg != "com.pavloffmedev.dcn") return
 
             val bounds = Rect().also { node.getBoundsInScreen(it) }
-            Log.i(TAG, "ROOT[$source] pkg=$pkg bounds=$bounds childCount=${node.childCount}")
+            Log.i(TAG, "OUR_ROOT[$source] bounds=$bounds")
             roots.add(node)
         }
 
-        addRoot(rootInActiveWindow, "Active")
+        addIfOurs(rootInActiveWindow, "Active")
 
         try {
-            windows?.forEachIndexed { index, window ->
-                Log.i(TAG, "WINDOW[$index] type=${window.type} layer=${window.layer} title=${window.title}")
-                addRoot(window.root, "Win$index")
+            windows?.forEachIndexed { i, w ->
+                addIfOurs(w.root, "Win$i")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "windows failed", e)
-        }
+        } catch (_: Exception) {}
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val all = windowsOnAllDisplays
                 for (i in 0 until all.size()) {
-                    val list = all.valueAt(i)
-                    list?.forEachIndexed { j, window ->
-                        addRoot(window.root, "Display${all.keyAt(i)}-Win$j")
+                    all.valueAt(i)?.forEachIndexed { j, w ->
+                        addIfOurs(w.root, "D${all.keyAt(i)}-$j")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "windowsOnAllDisplays failed", e)
-            }
+            } catch (_: Exception) {}
         }
 
-        Log.i(TAG, "collectAdRoots TOTAL: ${roots.size} roots")
         return roots
     }
 
@@ -218,17 +190,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
         queue.add(root to 0)
         var count = 0
-        while (queue.isNotEmpty() && count < MAX_DIAGNOSTIC_NODES) {
+        while (queue.isNotEmpty() && count < 40) {
             val (node, depth) = queue.removeFirst()
             val bounds = Rect().also(node::getBoundsInScreen)
-            Log.i(TAG, "TREE_NODE depth=$depth text=${node.text} desc=${node.contentDescription} " +
-                    "id=${node.viewIdResourceName} click=${node.isClickable} bounds=$bounds")
+            Log.i(TAG, "TREE depth=$depth text=${node.text} click=${node.isClickable} bounds=$bounds")
             count++
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { queue.add(it to depth + 1) }
             }
         }
-        Log.i(TAG, "TREE_DIAG_END nodes=$count")
     }
 
     private fun findFirstTarget(root: AccessibilityNodeInfo): Pair<AccessibilityNodeInfo, Boolean>? {
@@ -237,52 +207,36 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         val now = SystemClock.elapsedRealtime()
         val aggressive = (now - armedAt) > AGGRESSIVE_AFTER_MS
-        var bestCloseCandidate: AccessibilityNodeInfo? = null
-        var bestCloseScore = Int.MIN_VALUE
+        var best: AccessibilityNodeInfo? = null
+        var bestScore = Int.MIN_VALUE
 
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
+            if (!node.isEnabled) {
+                for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
+                continue
+            }
 
-            if (node.isEnabled) {
-                val label = describe(node)
-                val clickable = node.isClickable || hasClickableParent(node)
+            val label = describe(node)
+            val clickable = node.isClickable || hasClickableParent(node)
 
-                if (clickable) {
-                    // 1. Google Play / Install
-                    if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
-                        return node to true
-                    }
+            if (clickable) {
+                if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) return node to true
+                if (CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)) return node to false
+            }
 
-                    // 2. Явный крестик
-                    if (CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)) {
-                        return node to false
-                    }
-
-                    // 3. Форма крестика
-                    if (node.isClickable &&
-                        hasCloseImageChild(node) &&
-                        isInTopRightCorner(node, root)
-                    ) {
-                        return node to false
-                    }
-                }
-
-                // 4. Агрессивный режим — даже некликабельные маленькие ноды
-                if (aggressive) {
-                    val nodeRect = Rect().also { node.getBoundsInScreen(it) }
-                    val rootRect = Rect().also { root.getBoundsInScreen(it) }
-
-                    if (!rootRect.isEmpty && !nodeRect.isEmpty) {
-                        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.45f)
-                        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.40f)
-                        val sizeOk = nodeRect.width() in 10..100 && nodeRect.height() in 10..100
-
-                        if (nearRight && nearTop && sizeOk) {
-                            val score = scoreCloseCandidate(node, root)
-                            if (score > bestCloseScore) {
-                                bestCloseScore = score
-                                bestCloseCandidate = node
-                            }
+            if (aggressive) {
+                val nodeRect = Rect().also { node.getBoundsInScreen(it) }
+                val rootRect = Rect().also { root.getBoundsInScreen(it) }
+                if (!rootRect.isEmpty && !nodeRect.isEmpty) {
+                    val nearRight = nodeRect.right >= rootRect.right - rootRect.width() * 0.45f
+                    val nearTop = nodeRect.top <= rootRect.top + rootRect.height() * 0.40f
+                    val sizeOk = nodeRect.width() in 10..100 && nodeRect.height() in 10..100
+                    if (nearRight && nearTop && sizeOk) {
+                        val score = scoreCloseCandidate(node, root)
+                        if (score > bestScore) {
+                            bestScore = score
+                            best = node
                         }
                     }
                 }
@@ -293,103 +247,38 @@ class AdCloseAccessibilityService : AccessibilityService() {
             }
         }
 
-        if (aggressive && bestCloseCandidate != null) {
-            Log.w(TAG, "aggressive mode: clicking best top-right candidate " +
-                    "(score=$bestCloseScore, clickable=${bestCloseCandidate.isClickable})")
-            return bestCloseCandidate to false
+        if (aggressive && best != null) {
+            Log.w(TAG, "aggressive candidate score=$bestScore")
+            return best to false
         }
-
         return null
     }
 
-    private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
-        val parentRect = Rect().also(parent::getBoundsInScreen)
-        if (parentRect.width() !in 20..140 || parentRect.height() !in 20..140) return false
-
-        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
-        for (i in 0 until parent.childCount) {
-            parent.getChild(i)?.let { queue.add(it to 1) }
-        }
-
-        while (queue.isNotEmpty()) {
-            val (child, depth) = queue.removeFirst()
-            val className = child.className?.toString().orEmpty()
-            if (className.contains("Image", ignoreCase = true)) {
-                val imageRect = Rect().also(child::getBoundsInScreen)
-                if (imageRect.width() in 6..60 &&
-                    imageRect.height() in 6..60 &&
-                    parentRect.contains(imageRect.centerX(), imageRect.centerY())
-                ) {
-                    return true
-                }
-            }
-            if (depth < 3) {
-                for (i in 0 until child.childCount) {
-                    child.getChild(i)?.let { queue.add(it to depth + 1) }
-                }
-            }
-        }
-        return false
-    }
-
-    private fun isInTopRightCorner(
-        node: AccessibilityNodeInfo,
-        root: AccessibilityNodeInfo,
-        rightPercent: Float = 0.35f,
-        topPercent: Float = 0.32f
-    ): Boolean {
-        val nodeRect = Rect().also(node::getBoundsInScreen)
-        val rootRect = Rect().also(root::getBoundsInScreen)
-        if (rootRect.isEmpty || nodeRect.isEmpty) return false
-
-        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * rightPercent)
-        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * topPercent)
-
-        val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.30f)
-            .toInt()
-            .coerceIn(30, 180)
-        val sizeOk = nodeRect.width() in 14..maxSize && nodeRect.height() in 14..maxSize
-
-        return nearRight && nearTop && sizeOk
-    }
-
     private fun scoreCloseCandidate(node: AccessibilityNodeInfo, root: AccessibilityNodeInfo): Int {
-        val nodeRect = Rect().also(node::getBoundsInScreen)
-        val rootRect = Rect().also(root::getBoundsInScreen)
-        if (rootRect.isEmpty || nodeRect.isEmpty) return Int.MIN_VALUE
-
-        val rightScore = ((nodeRect.right - rootRect.left).toFloat() / rootRect.width() * 100).toInt()
-        val topScore = (100 - (nodeRect.top - rootRect.top).toFloat() / rootRect.height() * 100).toInt()
-        val sizePenalty = (nodeRect.width() + nodeRect.height()) / 3
-
-        return rightScore + topScore - sizePenalty
+        val nr = Rect().also(node::getBoundsInScreen)
+        val rr = Rect().also(root::getBoundsInScreen)
+        if (rr.isEmpty || nr.isEmpty) return Int.MIN_VALUE
+        val right = ((nr.right - rr.left).toFloat() / rr.width() * 100).toInt()
+        val top = (100 - (nr.top - rr.top).toFloat() / rr.height() * 100).toInt()
+        return right + top - (nr.width() + nr.height()) / 3
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
-        val candidates = listOf(
-            node.text?.toString(),
-            node.contentDescription?.toString(),
-            node.viewIdResourceName
-        )
-        return candidates.any { raw ->
-            raw?.trim()?.lowercase() in X_GLYPHS
-        }
+        val c = listOf(node.text?.toString(), node.contentDescription?.toString(), node.viewIdResourceName)
+        return c.any { it?.trim()?.lowercase() in X_GLYPHS }
     }
 
     private fun describe(node: AccessibilityNodeInfo): String =
-        listOfNotNull(
-            node.text?.toString(),
-            node.contentDescription?.toString(),
-            node.viewIdResourceName,
-            node.className?.toString()
-        ).joinToString(" ").lowercase().replace('_', ' ')
+        listOfNotNull(node.text?.toString(), node.contentDescription?.toString(),
+            node.viewIdResourceName, node.className?.toString())
+            .joinToString(" ").lowercase().replace('_', ' ')
 
     private fun hasClickableParent(node: AccessibilityNodeInfo): Boolean {
-        var parent = node.parent
-        repeat(5) {
-            if (parent == null) return false
-            if (parent.isClickable && parent.isEnabled) return true
-            parent = parent.parent
+        var p = node.parent
+        repeat(4) {
+            if (p == null) return false
+            if (p.isClickable && p.isEnabled) return true
+            p = p.parent
         }
         return false
     }
@@ -398,81 +287,52 @@ class AdCloseAccessibilityService : AccessibilityService() {
         if (node.isClickable && node.isEnabled) {
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
-
-        var parent = node.parent
-        repeat(4) {
-            if (parent == null) return@repeat
-            if (parent.isClickable && parent.isEnabled) {
-                parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            }
-            parent = parent.parent
+        var p = node.parent
+        repeat(3) {
+            if (p == null) return@repeat
+            if (p.isClickable && p.isEnabled) p.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            p = p.parent
         }
 
-        val rect = Rect()
-        node.getBoundsInScreen(rect)
+        val rect = Rect().also(node::getBoundsInScreen)
         if (rect.isEmpty) return false
 
         val x = rect.centerX().toFloat()
         val y = rect.centerY().toFloat()
-
-        Log.i(TAG, "gesture click at $x,$y bounds=$rect")
+        Log.i(TAG, "gesture at $x,$y")
 
         val path = Path().apply { moveTo(x, y) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 70)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 70))
+            .build()
 
-        return dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.i(TAG, "gesture completed")
-            }
-
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "gesture cancelled")
-            }
-        }, null)
+        return dispatchGesture(gesture, null, null)
     }
 
     private fun performBlindClick(x: Float, y: Float, reason: String) {
-        Log.i(TAG, "blind click ($reason) at $x,$y")
-
+        Log.i(TAG, "BLIND $reason at $x,$y")
         val path = Path().apply { moveTo(x, y) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 70)
-        val gesture = GestureDescription.Builder().addStroke(stroke).build()
-
-        dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                Log.i(TAG, "blind click ($reason) completed")
-            }
-
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                Log.w(TAG, "blind click ($reason) cancelled")
-            }
-        }, null)
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 70))
+            .build()
+        dispatchGesture(gesture, null, null)
     }
 
     override fun onInterrupt() = Unit
 
     companion object {
         private const val TAG = "AdCoin.AccessClose"
-        private const val CLICK_COOLDOWN_MS = 900L
-        private const val TREE_DUMP_INTERVAL_MS = 2500L
-        private const val MAX_DIAGNOSTIC_NODES = 50
-        private const val AGGRESSIVE_AFTER_MS = 6_500L
-        private const val BLIND_CLICK_AFTER_MS = 5_500L
-        private const val SMALL_WINDOW_AREA_RATIO = 0.45f
+        private const val CLICK_COOLDOWN_MS = 1100L
+        private const val TREE_DUMP_INTERVAL_MS = 3000L
+        private const val AGGRESSIVE_AFTER_MS = 6_000L
+        private const val BLIND_CLICK_AFTER_MS = 5_000L
+        private const val SMALL_WINDOW_AREA_RATIO = 0.42f
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
-            "google play", "play store", ">> google play", "googleplay",
-            "install", ">> install", "install app", "get the app", "get app",
-            "установить", "скачать", "открыть в google play"
+            "google play", "play store", "install", "установить", "скачать", "get the app"
         )
-
-        private val CLOSE_WORDS = listOf(
-            "close", "dismiss", "закрыть", "закрыть рекламу",
-            "skip", "пропустить", "закрыть окно"
-        )
-
-        private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗", "ｘ")
+        private val CLOSE_WORDS = listOf("close", "закрыть", "skip", "пропустить", "dismiss")
+        private val X_GLYPHS = setOf("x", "×", "✕", "✖", "✗")
     }
 }
