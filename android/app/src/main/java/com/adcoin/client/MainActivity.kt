@@ -35,19 +35,17 @@ class MainActivity : ComponentActivity() {
     private val pipMode = mutableStateOf(false)
     private val isActivityResumed = mutableStateOf(false)
 
-    private var onRewardCallback: (() -> Unit)? = null
+    private var adCoinViewModel: AdCoinViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Resolve the Activity-scoped ViewModel before MAX initialization so
+        // SDK callbacks cannot race a Compose LaunchedEffect assignment.
+        adCoinViewModel = androidx.lifecycle.ViewModelProvider(this)[AdCoinViewModel::class.java]
+
         setContent {
             val vm: AdCoinViewModel = viewModel()
-
-            LaunchedEffect(Unit) {
-                onRewardCallback = {
-                    vm.onRewarded()
-                }
-            }
 
             AdCoinApp(
                 isInPip = pipMode.value,
@@ -114,19 +112,24 @@ class MainActivity : ComponentActivity() {
                 adUnitId = adUnitId,
 
                 onRewardGranted = {
-                    Log.i(TAG, "Награда получена")
-
+                    Log.i(TAG, "MAX onUserRewarded callback received")
                     runOnUiThread {
-                        onRewardCallback?.invoke()
+                        adCoinViewModel?.onRewarded(it.label, it.amount)
                     }
+                },
+
+                onAdLoaded = {
+                    runOnUiThread { adCoinViewModel?.onMaxAdLoaded() }
                 },
 
                 onAdHidden = {
                     Log.i(TAG, "Реклама закрыта")
+                    runOnUiThread { adCoinViewModel?.onMaxAdHidden() }
                 },
 
                 onAdDisplayed = {
                     Log.i(TAG, "Реклама показана")
+                    runOnUiThread { adCoinViewModel?.onMaxAdDisplayed() }
                 },
 
                 autoCloser = closer
@@ -187,7 +190,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         controllerState.value = null
-        onRewardCallback = null
+        adCoinViewModel = null
         super.onDestroy()
     }
 }
