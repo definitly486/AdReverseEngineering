@@ -200,7 +200,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             // child inside a clickable parent in the ad's top-right corner.
             if (node.isClickable && node.isEnabled && node.isVisibleToUser &&
                 hasCloseImageChild(node) && matchesTopRightCloseShape(node, rootRect) &&
-                !isGooglePlayCta(label)
+                !containsGooglePlayCta(node)
             ) {
                 Log.i(TAG, "CLOSE_SHAPE_CANDIDATE source=$source label=$label bounds=$bounds")
                 if (clickCloseTarget(node, source, now, "image-child-top-right")) return true
@@ -210,7 +210,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             // to a small clickable node in the ad window and excludes CTA labels.
             if (aggressiveDiagnostics && node.isClickable && node.isEnabled &&
                 node.isVisibleToUser && isSmallTopRight(bounds, rootRect) &&
-                !isGooglePlayCta(label)
+                !containsGooglePlayCta(node)
             ) {
                 Log.i(TAG, "TOP_RIGHT_FALLBACK_CANDIDATE source=$source label=$label bounds=$bounds")
                 if (clickCloseTarget(node, source, now, "12s-top-right-fallback")) return true
@@ -245,7 +245,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         val bounds = Rect().also(target::getBoundsInScreen)
         val label = describe(target)
-        if (isGooglePlayCta(label)) {
+        if (containsGooglePlayCta(target)) {
             Log.w(TAG, "CLICK_BLOCKED_CTA source=$source method=$method label=$label bounds=$bounds")
             return false
         }
@@ -331,6 +331,27 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     private fun isGooglePlayCta(label: String): Boolean =
         GOOGLE_PLAY_WORDS.any { label.contains(it) }
+
+    /** Checks the candidate and its descendants so a labelled CTA nested in a
+     * generic clickable parent can never be activated by a close heuristic. */
+    private fun containsGooglePlayCta(root: AccessibilityNodeInfo): Boolean {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES) {
+            val node = queue.removeFirst()
+            visited++
+            if (isGooglePlayCta(describe(node))) return true
+            for (i in 0 until node.childCount) {
+                try {
+                    node.getChild(i)?.let(queue::add)
+                } catch (_: Exception) {
+                    // Ignore nodes removed during a redraw.
+                }
+            }
+        }
+        return false
+    }
 
     /** Finds the nearest clickable, enabled node, starting with this node. */
     private fun clickableTarget(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
