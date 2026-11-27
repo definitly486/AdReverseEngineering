@@ -169,39 +169,37 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 val clickable = node.isClickable || hasClickableParent(node)
 
                 if (clickable) {
-                    // Google Play / Install
-                    if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
-                        return node to true
+                    // Install is excluded from every click path, including aggressive X fallback.
+                    val isInstall = INSTALL_WORDS.any { word ->
+                        Regex("(^|\\W)${Regex.escape(word)}(\\W|$)").containsMatchIn(label)
                     }
-
-                    // Явный крестик по тексту / символу
-                    val isClose = CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)
-                    if (isClose) {
-                        return node to false
-                    }
-
-                    // Graphic X: use window-relative dimensions so detection survives
-                    // Freeform resize instead of relying on fixed pixel sizes.
-                    if (node.isClickable &&
-                        hasCloseImageChild(node, root) &&
-                        matchesTopRightCloseShape(node, root)
-                    ) {
-                        return node to false
-                    }
-
-                    // Freeform can shrink the X below old pixel thresholds.
-                    // Consider a small top-right control earlier, but only when
-                    // its position and relative size strongly resemble a close button.
-                    if (node.isClickable && isLikelyCloseControl(node, root)) {
-                        if (fallbackTopRight == null) {
-                            fallbackTopRight = node
+                    if (isInstall) {
+                        Log.v(TAG, "skipping Install CTA: $label")
+                    } else {
+                        // Google Play remains clickable.
+                        if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
+                            return node to true
                         }
-                    }
 
-                    // Keep the existing 12-second fallback for unusual ad layouts.
-                    if (aggressive && node.isClickable && isSmallTopRight(node, root)) {
-                        if (fallbackTopRight == null) {
-                            fallbackTopRight = node
+                        // Explicit close text / glyph
+                        val isClose = CLOSE_WORDS.any { label.contains(it) } || hasXGlyph(node)
+                        if (isClose) {
+                            return node to false
+                        }
+
+                        // Graphic X: top-right shape + small image
+                        if (node.isClickable &&
+                            hasCloseImageChild(node) &&
+                            matchesTopRightCloseShape(node, root)
+                        ) {
+                            return node to false
+                        }
+
+                        // Aggressive fallback
+                        if (aggressive && node.isClickable && isSmallTopRight(node, root)) {
+                            if (fallbackTopRight == null) {
+                                fallbackTopRight = node
+                            }
                         }
                     }
                 }
@@ -220,19 +218,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun hasCloseImageChild(
-        parent: AccessibilityNodeInfo,
-        root: AccessibilityNodeInfo
-    ): Boolean {
+    private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
         val parentRect = Rect().also(parent::getBoundsInScreen)
-        val rootRect = Rect().also(root::getBoundsInScreen)
-        if (parentRect.isEmpty || rootRect.isEmpty) return false
-
-        val parentWidthRatio = parentRect.width().toFloat() / rootRect.width()
-        val parentHeightRatio = parentRect.height().toFloat() / rootRect.height()
-        if (parentWidthRatio !in 0.025f..0.30f ||
-            parentHeightRatio !in 0.025f..0.30f
-        ) return false
+        if (parentRect.width() !in 36..110 || parentRect.height() !in 36..110) return false
 
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
         for (i in 0 until parent.childCount) {
@@ -244,13 +232,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val className = child.className?.toString().orEmpty()
             if (child.isVisibleToUser && className.contains("Image", ignoreCase = true)) {
                 val imageRect = Rect().also(child::getBoundsInScreen)
-                val imageWidthRatio =
-                    imageRect.width().toFloat() / parentRect.width().coerceAtLeast(1)
-                val imageHeightRatio =
-                    imageRect.height().toFloat() / parentRect.height().coerceAtLeast(1)
-                if (!imageRect.isEmpty &&
-                    imageWidthRatio in 0.12f..0.90f &&
-                    imageHeightRatio in 0.12f..0.90f &&
+                if (imageRect.width() in 8..48 &&
+                    imageRect.height() in 8..48 &&
                     parentRect.contains(imageRect.centerX(), imageRect.centerY())
                 ) {
                     return true
@@ -284,35 +267,13 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val rootRect = Rect().also(root::getBoundsInScreen)
         if (rootRect.isEmpty || nodeRect.isEmpty) return false
 
-        val widthRatio = nodeRect.width().toFloat() / rootRect.width()
-        val heightRatio = nodeRect.height().toFloat() / rootRect.height()
-        if (widthRatio !in 0.025f..0.32f || heightRatio !in 0.025f..0.32f) return false
+        val w = nodeRect.width()
+        val h = nodeRect.height()
+        if (w !in 24..130 || h !in 24..130) return false
 
-        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.28f)
-        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.24f)
+        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.25f)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.20f)
         return nearRight && nearTop
-    }
-
-    /**
-     * Early, conservative X candidate for resized Freeform windows.
-     * Must be a compact clickable node very close to the window's top-right.
-     */
-    private fun isLikelyCloseControl(
-        node: AccessibilityNodeInfo,
-        root: AccessibilityNodeInfo
-    ): Boolean {
-        val nodeRect = Rect().also(node::getBoundsInScreen)
-        val rootRect = Rect().also(root::getBoundsInScreen)
-        if (rootRect.isEmpty || nodeRect.isEmpty) return false
-
-        val widthRatio = nodeRect.width().toFloat() / rootRect.width()
-        val heightRatio = nodeRect.height().toFloat() / rootRect.height()
-        val nearRight = nodeRect.right >= rootRect.right - rootRect.width() * 0.18f
-        val nearTop = nodeRect.top <= rootRect.top + rootRect.height() * 0.18f
-
-        return nearRight && nearTop &&
-            widthRatio in 0.025f..0.22f &&
-            heightRatio in 0.025f..0.22f
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
@@ -374,10 +335,13 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val AGGRESSIVE_AFTER_MS = 12_000L
         private const val KEY_ARMED_AT = "armed_at"
 
+        private val INSTALL_WORDS = listOf(
+            "install", "установить"
+        )
+
         private val GOOGLE_PLAY_WORDS = listOf(
             "google play", "play store", ">> google play", "googleplay",
-            "install", ">> install", "install app", "get the app", "get app",
-            "установить", "скачать", "открыть в google play"
+            "открыть в google play"
         )
 
         private val CLOSE_WORDS = listOf(
