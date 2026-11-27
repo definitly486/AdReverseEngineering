@@ -55,7 +55,7 @@ script from a computer with ADB installed and the device connected with USB
 debugging authorized:
 
 ```bash
-./launch-freeform.sh
+sh ./launch-freeform.sh
 ```
 
 The script enables Android's Freeform/resizable-activity settings and starts
