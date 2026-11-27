@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -159,7 +160,9 @@ class MainActivity : ComponentActivity() {
         pipVideoFile.value = videoFile
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val params = PictureInPictureParams.Builder().build()
+            val params = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
             enterPictureInPictureMode(params)
         } else {
             enterPictureInPictureMode()
@@ -205,7 +208,8 @@ private fun AdCoinApp(
         PipStatus(
             infiniteMode = state.infiniteMode,
             videosCompleted = state.videosCompleted,
-            videoFile = pipVideoFile
+            videoFile = pipVideoFile,
+            balance = state.balance?.toString() ?: "—"
         )
     } else {
         if (state.tokenPresent) {
@@ -299,6 +303,16 @@ private fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        OutlinedButton(
+            onClick = { onEnterPip(controller?.getLatestVideoFile()) },
+            enabled = isActivityResumed,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Мини-окно приложения")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Button(
             onClick = {
                 val activeController = controller ?: return@Button
@@ -353,56 +367,72 @@ private fun DashboardScreen(
 private fun PipStatus(
     infiniteMode: Boolean,
     videosCompleted: Int,
-    videoFile: File?
+    videoFile: File?,
+    balance: String
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(10.dp),
-        verticalArrangement = Arrangement.Center
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        if (videoFile != null && videoFile.exists()) {
+        Text(
+            "AdReverse",
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF8BDAA8),
+            style = MaterialTheme.typography.titleSmall
+        )
+
+        if (videoFile != null && videoFile.exists() && videoFile.length() > 0L) {
             AndroidView(
                 factory = { ctx ->
                     android.widget.VideoView(ctx).apply {
                         setVideoPath(videoFile.absolutePath)
-
                         setOnPreparedListener { player ->
                             player.isLooping = false
                             start()
                         }
-
                         setOnErrorListener { _, what, extra ->
-                            Log.e(
-                                TAG,
-                                "Ошибка воспроизведения: $what / $extra"
-                            )
+                            Log.e(TAG, "PiP video error: $what / $extra")
                             true
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
         } else {
-            Text(
-                "AdReverse · PiP",
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF8BDAA8)
-            )
-
-            Text(
-                if (infiniteMode) {
-                    "Просмотр активен: $videosCompleted"
-                } else {
-                    "Приложение свернуто"
-                }
-            )
-
-            Text(
-                "Ожидание видеоролика...",
-                color = Color.LightGray
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    if (infiniteMode) "Просмотр активен" else "Приложение работает",
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+                Text(
+                    "Баланс: $balance",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "Роликов: $videosCompleted",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
+
+        Text(
+            if (infiniteMode) "Автопросмотр включён · $videosCompleted" else "Мини-окно приложения",
+            color = Color.LightGray,
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 

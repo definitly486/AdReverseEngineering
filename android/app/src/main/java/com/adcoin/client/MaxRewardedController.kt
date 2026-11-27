@@ -37,40 +37,128 @@ class MaxRewardedController(
     fun isReady(): Boolean = rewardedAd.isReady
 
     /**
-     * Ищет самый свежий видеофайл в директориях кеша приложения.
-     * AppLovin MAX кэширует видео перед показом, и мы можем перехватить этот файл.
+     * Ищет доступные приложению локальные видеофайлы.
+     *
+     * MAX не предоставляет публичный API для получения URL/потока рекламного
+     * ролика. Поэтому поиск ограничен файлами, которые Android разрешает читать
+     * нашему приложению; приватное хранилище других приложений и защищённые
+     * DRM-потоки таким способом недоступны.
      */
     fun getLatestVideoFile(): File? {
-        val dirs = listOf(
+        val roots = listOfNotNull(
             activity.cacheDir,
+            activity.codeCacheDir,
+            activity.noBackupFilesDir,
             activity.filesDir,
-            activity.getExternalFilesDir(null),
-            activity.externalCacheDir
-        ).filterNotNull()
+            activity.externalCacheDir,
+            activity.getExternalFilesDir(null)
+        ).distinctBy { it.absolutePath }
 
-        var latestFile: File? = null
-        var latestTime = 0L
+        val queue = ArrayDeque<Pair<File, Int>>()
+        roots.filter { it.exists() && it.canRead() }.forEach { queue.add(it to 0) }
 
-        for (dir in dirs) {
-            if (!dir.exists()) continue
-            val queue = ArrayDeque<File>()
-            queue.add(dir)
-            while (queue.isNotEmpty()) {
-                val file = queue.removeFirst()
-                if (file.isDirectory) {
-                    file.listFiles()?.forEach { queue.add(it) }
-                } else {
-                    val ext = file.extension.lowercase()
-                    if (ext == "mp4" || ext == "webm" || ext == "3gp" || ext == "m4v") {
-                        if (file.lastModified() > latestTime) {
-                            latestTime = file.lastModified()
-                            latestFile = file
-                        }
+        var inspected = 0
+        var latest: File? = null
+        var latestModified = Long.MIN_VALUE
+        var videoCandidates = 0
+        var streamManifests = 0
+
+        while (queue.isNotEmpty() && inspected < MAX_SCAN_ENTRIES) {
+            val (current, depth) = queue.removeFirst()
+            inspected++
+
+            if (current.isDirectory) {
+                if (depth >= MAX_SCAN_DEPTH || !current.canRead()) continue
+                val children = try {
+                    current.listFiles()
+                } catch (error: SecurityException) {
+                    Log.d(TAG, "Skip unreadable directory: ${current.name}")
+                    null
+                }
+                children?.forEach { child ->
+                    if (child.isDirectory) {
+                        queue.add(child to depth + 1)
+                    } else if (child.isFile && child.canRead()) {
+                        queue.add(child to depth + 1)
                     }
                 }
+                continue
+            }
+
+            val name = current.name.lowercase()
+            if (name.endsWith(".m3u8") || name.endsWith(".mpd")) {
+                streamManifests++
+                Log.d(TAG, "Found cached stream manifest (not necessarily playable): ${current.absolutePath}")
+                continue
+            }
+
+            if (!isVideoCandidate(current)) continue
+            videoCandidates++
+
+            val modified = current.lastModified()
+            if (modified > latestModified) {
+                latestModified = modified
+                latest = current
             }
         }
-        return latestFile
+
+        Log.i(
+            TAG,
+            "Media scan: inspected=$inspected videoCandidates=$videoCandidates " +
+                "streamManifests=$streamManifests selected=${latest?.absolutePath ?: "none"}"
+        )
+        return latest
+    }
+
+    /**
+     * Проверяет расширение и сигнатуру контейнера. Это находит MP4/WebM/3GP
+     * даже если SDK сохранил файл без расширения, и отсекает случайные .dat.
+     */
+    private fun isVideoCandidate(file: File): Boolean {
+        if (file.length() < MIN_VIDEO_BYTES) return false
+
+        return try {
+            java.io.RandomAccessFile(file, "r").use { input ->
+                if (input.length() < 12L) return false
+                val header = ByteArray(16)
+                input.readFully(header, 0, minOf(header.size.toLong(), input.length()).toInt())
+
+                val isIsoBmff =
+                    header[4] == 'f'.code.toByte() &&
+                    header[5] == 't'.code.toByte() &&
+                    header[6] == 'y'.code.toByte() &&
+                    header[7] == 'p'.code.toByte()
+                val isWebm =
+                    header[0] == 0x1A.toByte() &&
+                    header[1] == 0x45.toByte() &&
+                    header[2] == 0xDF.toByte() &&
+                    header[3] == 0xA3.toByte()
+                val isAvi =
+                    header[0] == 'R'.code.toByte() &&
+                    header[1] == 'I'.code.toByte() &&
+                    header[2] == 'F'.code.toByte() &&
+                    header[3] == 'F'.code.toByte() &&
+                    header[8] == 'A'.code.toByte() &&
+                    header[9] == 'V'.code.toByte() &&
+                    header[10] == 'I'.code.toByte()
+                val extension = file.extension.lowercase()
+                val knownVideoExtension = extension in setOf(
+                    "mp4", "m4v", "3gp", "webm", "mov", "avi"
+                )
+
+                isIsoBmff || isWebm || isAvi ||
+                    (knownVideoExtension && file.length() >= MIN_VIDEO_BYTES)
+            }
+        } catch (error: Exception) {
+            Log.d(TAG, "Cannot inspect media candidate ${file.name}: ${error.message}")
+            false
+        }
+    }
+
+    private companion object {
+        const val MAX_SCAN_ENTRIES = 2500
+        const val MAX_SCAN_DEPTH = 10
+        const val MIN_VIDEO_BYTES = 32L * 1024L
     }
 
     fun show(): Boolean {
