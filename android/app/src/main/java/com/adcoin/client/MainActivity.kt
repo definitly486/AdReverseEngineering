@@ -173,7 +173,8 @@ private fun AdCoinApp(
                     state = state,
                     vm = vm,
                     onWatchAd = { controller?.show() },
-                    onEnterPip = onEnterPip
+                    onEnterPip = onEnterPip,
+                    isActivityResumed = isActivityResumed.value
                 )
             }
         }
@@ -244,7 +245,8 @@ private fun DashboardScreen(
     state: ClientState,
     vm: AdCoinViewModel,
     onWatchAd: () -> Unit,
-    onEnterPip: () -> Unit
+    onEnterPip: () -> Unit,
+    isActivityResumed: Boolean
 ) {
     val context = LocalContext.current
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
