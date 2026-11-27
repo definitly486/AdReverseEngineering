@@ -3,6 +3,7 @@ package com.adcoin.client
 import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
 import com.applovin.mediation.MaxAd
 import com.applovin.mediation.MaxError
 import com.applovin.mediation.MaxReward
@@ -65,7 +66,10 @@ class MaxRewardedController(
     fun isReady(): Boolean = initialized && (rewardedAd?.isReady == true)
 
     fun show(): Boolean {
-        if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+        val lifecycleOwner = activity as? LifecycleOwner
+        if (lifecycleOwner == null ||
+            !lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) {
             onMessage("Следующий ролик ожидает возврата в AdReverse: Android не разрешает MAX открывать полноэкранную рекламу из фона.")
             return false
         }
