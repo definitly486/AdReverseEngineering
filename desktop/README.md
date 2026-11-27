@@ -1,6 +1,6 @@
 # AdCoin for Linux
 
-Native PySide6 desktop client. This is a separate Linux application; Android sources and the `app` branch remain unchanged.
+Native PySide6 desktop client. This is a separate Linux application; Android sources and the `app` branch remain unchanged. The project is run directly from source; no `.deb` package is produced.
 
 ## Initial features
 - Email-code login through `login/sendCode` and `login/validateCode`.
@@ -16,10 +16,4 @@ Install Python, PySide6 and requests. On Debian/Ubuntu:
 ```sh
 sudo apt install python3 python3-pyside6.qtwidgets python3-requests
 python3 desktop/adcoin_linux.py
-```
-
-## Build .deb
-```sh
-bash packaging/build-deb.sh
-sudo apt install ./dist/adcoin_0.1.0_all.deb
 ```
