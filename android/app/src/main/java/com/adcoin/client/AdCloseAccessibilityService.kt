@@ -119,25 +119,46 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
                 }
             }
+            // Для X используем отдельный узкий радиус 1 см и выбираем
+            // только ближайшую цель, чтобы не задевать соседние кнопки.
+            val rightRadiusPx = (1f * resources.displayMetrics.densityDpi / 2.54f)
+                .toInt().coerceAtLeast(1)
             rightResult?.first?.let { anchor ->
-                val before = tapTargets.size
-                collectClickableTargetsInRadius(anchor, root, radiusPx, tapTargets)
-                if (tapTargets.size == before) {
-                    Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
+                val anchorBounds = Rect().also(anchor::getBoundsInScreen)
+                if (!anchorBounds.isEmpty) {
+                    val cx = anchorBounds.exactCenterX()
+                    val cy = anchorBounds.exactCenterY()
+                    val candidates = mutableListOf<Rect>()
+                    collectClickableTargetsAroundPoint(root, cx, cy, rightRadiusPx, candidates)
+                    val nearest = candidates.minByOrNull {
+                        val dx = it.exactCenterX() - cx
+                        val dy = it.exactCenterY() - cy
+                        dx * dx + dy * dy
+                    }
+                    tapTargets.add(nearest ?: anchorBounds)
+                    Log.i(TAG, "RIGHT_X target center=(" + cx + "," + cy + ") radiusCm=1 radiusPx=" +
+                            rightRadiusPx + " candidateCount=" + candidates.size + " selected=" + nearest)
                 }
             }
-            // Если X вообще отсутствует в Accessibility-дереве, используем верхний правый
-            // угол проверенного рекламного окна и тот же радиус поиска 10 см.
+            // Если X отсутствует в Accessibility-дереве, пробуем точку почти
+            // в самом правом верхнем углу окна. Радиус поиска — только 1 см.
             if (rightResult == null) {
                 val rootBounds = Rect().also(root::getBoundsInScreen)
                 if (!rootBounds.isEmpty) {
-                    val margin = (24f * resources.displayMetrics.density).toInt()
+                    val margin = (8f * resources.displayMetrics.density).toInt().coerceAtLeast(1)
                     val x = (rootBounds.right - margin).coerceIn(rootBounds.left, rootBounds.right - 1)
                     val y = (rootBounds.top + margin).coerceIn(rootBounds.top, rootBounds.bottom - 1)
-                    val before = tapTargets.size
-                    collectClickableTargetsAroundPoint(root, x.toFloat(), y.toFloat(), radiusPx, tapTargets)
-                    if (tapTargets.size == before) tapTargets.add(Rect(x, y, x + 1, y + 1))
-                    Log.w(TAG, "X not present in accessibility tree; top-right fallback point=($x,$y) radiusCm=10")
+                    val candidates = mutableListOf<Rect>()
+                    collectClickableTargetsAroundPoint(root, x.toFloat(), y.toFloat(), rightRadiusPx, candidates)
+                    val nearest = candidates.minByOrNull {
+                        val dx = it.exactCenterX() - x
+                        val dy = it.exactCenterY() - y
+                        dx * dx + dy * dy
+                    }
+                    tapTargets.add(nearest ?: Rect(x, y, x + 1, y + 1))
+                    Log.w(TAG, "X not present in accessibility tree; top-right corner=(" + x + "," + y +
+                            ") radiusCm=1 radiusPx=" + rightRadiusPx + " candidates=" +
+                            candidates.size + " selected=" + nearest)
                 }
             }
 
@@ -373,12 +394,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
             object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     Log.i(TAG, "corner tap completed index=${index + 1}/${targets.size} x=$x y=$y")
-                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 140)
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 400)
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     Log.w(TAG, "corner tap cancelled index=${index + 1}/${targets.size}")
-                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 180)
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 400)
                 }
             },
             null
@@ -398,7 +419,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val density = resources.displayMetrics.density
-        val size = (56f * density).toInt()
+        val size = (80f * density).toInt()
         val marker = tapMarkerView ?: TapMarkerView().also { tapMarkerView = it }
 
         try {
@@ -447,12 +468,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLACK
             style = Paint.Style.STROKE
-            strokeWidth = 5f * resources.displayMetrics.density
+            strokeWidth = 7f * resources.displayMetrics.density
         }
         private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.YELLOW
             style = Paint.Style.STROKE
-            strokeWidth = 3f * resources.displayMetrics.density
+            strokeWidth = 5f * resources.displayMetrics.density
         }
         private val center = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.RED
@@ -464,7 +485,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val cx = width / 2f
             val cy = height / 2f
             val density = resources.displayMetrics.density
-            val radius = 19f * density
+            val radius = 28f * density
             canvas.drawCircle(cx, cy, radius, outline)
             canvas.drawCircle(cx, cy, radius, ring)
             canvas.drawLine(cx - 25f * density, cy, cx + 25f * density, cy, outline)
@@ -650,7 +671,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val MAX_DIAGNOSTIC_NODES = 80
         private const val AGGRESSIVE_AFTER_MS = 8_000L
         private const val SMALL_WINDOW_MAX_SIZE = 1100
-        private const val TAP_MARKER_VISIBLE_MS = 550L
+        private const val TAP_MARKER_VISIBLE_MS = 1400L
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
