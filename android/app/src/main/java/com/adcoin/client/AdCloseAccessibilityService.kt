@@ -12,11 +12,10 @@ import android.view.accessibility.AccessibilityWindowInfo
 import java.util.ArrayDeque
 
 /**
- * Read-only diagnostics for MAX ad windows while an ad is displayed.
+ * Accessibility inspection for MAX ad windows while an ad is displayed.
  *
- * This service deliberately performs NO clicks and dispatches NO gestures.
- * It only records the accessibility window/node tree so we can determine
- * whether CTA controls are exposed while the MAX Activity is in PiP.
+ * The service logs Google Play CTA bounds without activating them. It may
+ * activate only an explicitly-labelled close/dismiss/skip control.
  */
 class AdCloseAccessibilityService : AccessibilityService() {
 
@@ -87,7 +86,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 Log.e(TAG, "ALL_DISPLAY_ENUMERATION_FAILED", e)
             }
         }
-        Log.i(TAG, "DIAG_END windows=${seen.size}; read-only mode, no input sent")
+        Log.i(TAG, "DIAG_END windows=${seen.size}; Google Play CTA is diagnostic-only; explicit close control may be clicked")
     }
 
     /**
