@@ -109,6 +109,7 @@ class BackgroundViewingService : Service() {
         private const val NOTIFICATION_ID = 7401
         const val PREFS_NAME = "adreverse_background_session"
         const val KEY_INFINITE_MODE = "infinite_mode"
+        const val KEY_VIDEOS_COMPLETED = "videos_completed"
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, BackgroundViewingService::class.java)
