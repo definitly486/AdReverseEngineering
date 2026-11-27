@@ -56,7 +56,7 @@ jobs:
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
       - name: Record build timestamp
-        run: echo "BUILD_TIME=$(date -u +\"%Y-%m-%d %H:%M:%S UTC\")" >> "$GITHUB_ENV"
+        run: echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Build signed Release APK
         working-directory: android
