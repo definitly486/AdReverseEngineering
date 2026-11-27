@@ -38,6 +38,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     private val backgroundPrefs = application.getSharedPreferences(
         BackgroundViewingService.PREFS_NAME, Application.MODE_PRIVATE
     )
+    // Snapshot taken when MAX actually starts displaying an ad. A reward is
+    // considered confirmed only when the AdCoin API reports a higher balance.
+    private var balanceBeforeCurrentAd: Double? = null
+
     private val _state = MutableStateFlow(
         ClientState(
             tokenPresent = !store.token().isNullOrBlank(),
@@ -166,6 +170,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onMaxAdDisplayed() {
+        balanceBeforeCurrentAd = _state.value.balance
         _state.value = _state.value.copy(
             adReady = false, adHidden = false,
             rewardVerifiedForAd = false, autoShowNext = false
@@ -194,38 +199,54 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(autoShowNext = false)
     }
 
-    fun onRewarded() {
-        // Guard against re-entrant / duplicate reward processing.
+    fun onRewarded(rewardLabel: String, rewardAmount: Int) {
+        // MAX may emit the callback only once per impression; ignore duplicate
+        // callbacks while the corresponding AdCoin balance check is running.
         if (_state.value.rewardInFlight) {
-            setMessage("Начисление уже проверяется — повторный callback проигнорирован.")
+            setMessage("Награда MAX уже проверяется; повторное событие проигнорировано.")
             return
         }
+
+        val baseline = balanceBeforeCurrentAd ?: _state.value.balance
+        Log.i("AdCoin.Reward", "MAX reward callback: label=$rewardLabel amount=$rewardAmount baseline=$baseline")
+
         viewModelScope.launch {
             _state.value = _state.value.copy(
                 rewardInFlight = true,
                 checkingReward = true,
-                message = "Реклама завершена. Проверяем серверный баланс…"
+                message = "MAX подтвердил награду ($rewardLabel × $rewardAmount). Проверяем баланс AdCoin…"
             )
+
             var credited = false
+            var lastRefreshSucceeded = false
+
+            // Query immediately, then allow the AdCoin backend time to process
+            // its MAX server-side reward callback. Never manufacture a balance.
             for (attempt in 0 until 12) {
-                delay(5_000)
-                val previous = _state.value.balance
+                if (attempt > 0) delay(5_000)
                 val result = runCatching { api.wallet() }.getOrNull()
                 if (result != null) {
+                    lastRefreshSucceeded = true
                     store.updateUserId(result.userId)
                     val next = result.balance
                     _state.value = _state.value.copy(
                         balance = next ?: _state.value.balance,
                         dailyProgress = result.dailyProgress ?: _state.value.dailyProgress,
                         dailyTarget = result.dailyTarget ?: _state.value.dailyTarget,
+                        dailyReward = result.dailyReward ?: _state.value.dailyReward,
                         userId = result.userId ?: store.userId()
                     )
-                    if (previous != null && next != null && next > previous + 0.0001) {
+
+                    if (baseline != null && next != null && next > baseline + 0.0001) {
                         credited = true
+                        Log.i("AdCoin.Reward", "AdCoin balance increased: $baseline -> $next")
                         break
                     }
+                } else {
+                    Log.w("AdCoin.Reward", "AdCoin wallet refresh failed (attempt ${attempt + 1}/12)")
                 }
             }
+
             val wasInfinite = _state.value.infiniteMode
             val completed = _state.value.videosCompleted + if (credited) 1 else 0
             backgroundPrefs.edit().putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, completed).apply()
@@ -236,13 +257,17 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 rewardVerifiedForAd = credited,
                 message = when {
                     credited && wasInfinite ->
-                        "Сервер подтвердил начисление (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
+                        "AdCoin подтвердил награду (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
                     credited ->
-                        "Сервер подтвердил увеличение баланса."
+                        "AdCoin подтвердил начисление. Баланс обновлён."
+                    baseline == null ->
+                        "MAX сообщил о награде, баланс обновлён: ${if (lastRefreshSucceeded) "сервер не вернул исходный баланс для сравнения" else "сервер недоступен"}. Начисление не подтверждено."
+                    !lastRefreshSucceeded ->
+                        "MAX сообщил о награде, но API AdCoin недоступен. Не удалось проверить начисление."
                     wasInfinite ->
-                        "Сервер пока не подтвердил награду. Автоматический следующий показ остановлен."
+                        "MAX сообщил о награде, но баланс AdCoin не изменился. Следующий показ остановлен до подтверждения сервера."
                     else ->
-                        "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
+                        "MAX сообщил о награде, но AdCoin пока не отразил её в балансе. Баланс можно обновить позже."
                 }
             )
             maybeScheduleNextAd()
