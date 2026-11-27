@@ -20,6 +20,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private var armedAt = 0L
     private var lastBlindClickAt = 0L
     private var lastWindowDumpAt = 0L
+    private var lastGpStatusAt = 0L
+    private var GP: Rect? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
@@ -155,10 +157,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
     }
 
     private fun findFirstTarget(root: AccessibilityNodeInfo): Pair<AccessibilityNodeInfo, Boolean>? {
+        GP = null
         val q = ArrayDeque<AccessibilityNodeInfo>()
         q.add(root)
         val aggressive = SystemClock.elapsedRealtime() - armedAt > 6000
         var best: AccessibilityNodeInfo? = null
+        var closeTarget: AccessibilityNodeInfo? = null
         var bestScore = Int.MIN_VALUE
 
         while (q.isNotEmpty()) {
@@ -172,13 +176,25 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val canClick = node.isClickable || hasClickableParent(node)
 
             if (canClick) {
-                if (GP_WORDS.any { label.contains(it) }) {
+                if (GP == null && GP_WORDS.any { label.contains(it) }) {
                     val bounds = Rect().also(node::getBoundsInScreen)
-                    Log.i(TAG, "CTA candidate (not auto-clicked): label=" + label +
-                            " bounds=" + bounds + " clickable=" + node.isClickable +
-                            " class=" + node.className)
+                    if (!bounds.isEmpty) {
+                        GP = Rect(bounds)
+                        Log.i(
+                            TAG,
+                            "GP FOUND: label=$label bounds=$GP " +
+                                    "left=${bounds.left} top=${bounds.top} " +
+                                    "right=${bounds.right} bottom=${bounds.bottom} " +
+                                    "centerX=${bounds.centerX()} centerY=${bounds.centerY()} " +
+                                    "clickable=${node.isClickable} class=${node.className}"
+                        )
+                    }
                 }
-                if (CLOSE_WORDS.any { label.contains(it) } || isX(node)) return node to false
+                if (closeTarget == null &&
+                    (CLOSE_WORDS.any { label.contains(it) } || isX(node))
+                ) {
+                    closeTarget = node
+                }
             }
 
             if (aggressive) {
@@ -203,6 +219,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
             for (i in 0 until node.childCount) node.getChild(i)?.let { q.add(it) }
         }
 
+        if (GP == null) {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastGpStatusAt >= GP_STATUS_LOG_INTERVAL_MS) {
+                Log.i(TAG, "GP NOT FOUND: Google Play / Install button not detected in scanned window")
+                lastGpStatusAt = now
+            }
+        }
+
+        if (closeTarget != null) return closeTarget to false
         return if (aggressive && best != null) best to false else null
     }
 
@@ -276,6 +301,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val BLIND_AFTER_MS = 4500L
         private const val BLIND_COOLDOWN_MS = 8000L   // чтобы не кликало постоянно
         private const val KEY_ARMED_AT = "armed_at"
+        private const val GP_STATUS_LOG_INTERVAL_MS = 3000L
 
         private val GP_WORDS = listOf("google play", "install", "установить", "скачать", "get the app")
         private val CLOSE_WORDS = listOf("close", "закрыть", "skip", "пропустить")
