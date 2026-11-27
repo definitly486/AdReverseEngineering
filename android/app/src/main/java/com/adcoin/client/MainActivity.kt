@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -42,6 +43,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 
@@ -101,6 +105,21 @@ private fun AdCoinApp(
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val activity = context as? android.app.Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val isActivityResumed = remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isActivityResumed.value = true
+                Lifecycle.Event.ON_PAUSE -> isActivityResumed.value = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val controller = remember(activity, state.userId) {
         if (activity != null && !state.userId.isNullOrBlank()) {
             val closer = AdAutoCloser(
@@ -122,11 +141,15 @@ private fun AdCoinApp(
     LaunchedEffect(controller) {
         controller?.initializeAndLoad()
     }
-    LaunchedEffect(state.autoShowNext, state.infiniteMode) {
+    LaunchedEffect(state.autoShowNext, state.infiniteMode, isActivityResumed.value) {
         if (state.autoShowNext && state.infiniteMode) {
-            vm.consumeAutoShowRequest()
-            val shown = controller?.show() == true
-            if (!shown) vm.setMessage("Следующий ролик пока не готов. Автоматический цикл приостановлен.")
+            if (!isActivityResumed.value) {
+                vm.setMessage("Награда подтверждена, следующий ролик готов к запуску. Вернитесь в AdReverse: Android блокирует открытие MAX-рекламы из фона.")
+            } else {
+                vm.consumeAutoShowRequest()
+                val shown = controller?.show() == true
+                if (!shown) vm.setMessage("Следующий ролик пока не готов. Автоматический цикл ожидает готовности MAX.")
+            }
         }
     }
 
@@ -251,8 +274,8 @@ private fun DashboardScreen(
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Следующий ролик запускается автоматически после штатного закрытия текущей рекламы " +
-                        "и подтверждения награды сервером. Первый запуск требует нажатия; остановить цикл можно кнопкой «Стоп».",
+                    "После закрытия рекламы и подтверждения награды сервером следующий ролик запускается автоматически, " +
+                        "пока AdReverse открыт. В фоне сессия и автозакрытие сохраняются, но Android требует вернуться в AdReverse для нового полноэкранного показа MAX.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.LightGray
                 )
@@ -275,6 +298,7 @@ private fun DashboardScreen(
                 } else {
                     Text(
                         if (state.checkingReward || state.rewardInFlight) "Проверяем начисление…"
+                        else if (!isActivityResumed.value) "Сессия работает в фоне; следующий показ ожидает возврата в AdReverse"
                         else "Автоматический цикл активен",
                         color = Color(0xFF8BDAA8)
                     )
