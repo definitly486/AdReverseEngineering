@@ -19,6 +19,9 @@ val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
 val androidVersionName = providers.environmentVariable("ANDROID_VERSION_NAME")
     .orElse("1.0.$androidVersionCode")
     .get()
+val buildBranch = providers.environmentVariable("BUILD_BRANCH").orElse("local").get()
+val buildCommit = providers.environmentVariable("BUILD_COMMIT").orElse("unknown").get()
+val buildTime = providers.environmentVariable("BUILD_TIME").orElse("unknown").get()
 
 android {
     namespace = "com.adcoin.client"
