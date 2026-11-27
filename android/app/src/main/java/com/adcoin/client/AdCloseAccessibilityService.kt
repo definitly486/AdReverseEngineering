@@ -2,7 +2,9 @@ package com.adcoin.client
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.graphics.Path
 import android.graphics.Rect
+import android.accessibilityservice.GestureDescription
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -231,7 +233,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
-            if (node.isEnabled && (node.isClickable || hasClickableParent(node)) &&
+            val className = node.className?.toString().orEmpty()
+            val isImageTarget = className.contains("Image", ignoreCase = true)
+            if (node.isVisibleToUser &&
+                (node.isEnabled || isImageTarget) &&
+                (node.isClickable || hasClickableParent(node) || isImageTarget) &&
                 isInTopLeftCorner(node, root)
             ) {
                 val score = scoreTopLeftCandidate(node, root)
@@ -326,7 +332,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.40f)
             .toInt()
             .coerceIn(48, 260)
-        val sizeOk = nodeRect.width() in 12..maxSize && nodeRect.height() in 12..maxSize
+        val sizeOk = nodeRect.width() in 8..maxSize && nodeRect.height() in 8..maxSize
 
         // Кандидат должен целиком находиться внутри верхней левой зоны окна.
         val insideWindow = rootRect.contains(nodeRect)
@@ -399,7 +405,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         var parent = node.parent
         repeat(5) {
-            if (parent == null) return false
+            if (parent == null) return@repeat
             if (parent.isClickable && parent.isEnabled &&
                 parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             ) {
@@ -407,7 +413,20 @@ class AdCloseAccessibilityService : AccessibilityService() {
             }
             parent = parent.parent
         }
-        return false
+
+        // Некоторые рекламные окна рисуют X как ImageView и не поддерживают ACTION_CLICK.
+        // В таком случае посылаем один координатный тап в центр найденного элемента.
+        val target = Rect().also(node::getBoundsInScreen)
+        if (target.isEmpty || target.width() <= 0 || target.height() <= 0) return false
+        val x = target.exactCenterX()
+        val y = target.exactCenterY()
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 90))
+            .build()
+        val dispatched = dispatchGesture(gesture, null, null)
+        Log.i(TAG, "coordinate tap dispatched=$dispatched x=$x y=$y target=$target")
+        return dispatched
     }
 
     override fun onInterrupt() = Unit
@@ -418,7 +437,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val TREE_DUMP_INTERVAL_MS = 2000L
         private const val MAX_DIAGNOSTIC_NODES = 80
         private const val AGGRESSIVE_AFTER_MS = 8_000L
-        private const val SMALL_WINDOW_MAX_SIZE = 800
+        private const val SMALL_WINDOW_MAX_SIZE = 1100
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
