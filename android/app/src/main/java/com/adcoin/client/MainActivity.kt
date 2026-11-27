@@ -19,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.applovin.mediation.AppLovinMediationProvider
 import com.applovin.sdk.AppLovinSdk
 import com.applovin.sdk.AppLovinSdkInitializationConfiguration
 import java.io.File
@@ -40,7 +39,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Сначала создаём интерфейс.
         setContent {
             val vm: AdCoinViewModel = viewModel()
 
@@ -53,9 +51,7 @@ class MainActivity : ComponentActivity() {
             AdCoinApp(
                 isInPip = pipMode.value,
                 pipVideoFile = pipVideoFile.value,
-                onEnterPip = { file ->
-                    enterAppPictureInPicture(file)
-                },
+                onEnterPip = ::enterAppPictureInPicture,
                 onExitPip = ::exitAppPictureInPicture,
                 controller = controllerState.value,
                 isActivityResumed = isActivityResumed.value,
@@ -66,35 +62,26 @@ class MainActivity : ComponentActivity() {
         initializeAppLovin()
     }
 
-    /**
-     * Инициализация AppLovin MAX SDK.
-     */
     private fun initializeAppLovin() {
         try {
-            // ВАЖНО:
-            // Здесь должен быть SDK KEY из AppLovin Dashboard.
-            // Это НЕ Rewarded Ad Unit ID.
             val sdkKey = BuildConfig.APPLOVIN_SDK_KEY
 
             if (sdkKey.isBlank()) {
-                Log.e(TAG, "AppLovin SDK Key не задан")
+                Log.e(TAG, "APPLOVIN_SDK_KEY не задан")
                 return
             }
 
-            val initializationConfig =
+            val initConfig =
                 AppLovinSdkInitializationConfiguration
                     .builder(sdkKey)
-                    .setMediationProvider(
-                        AppLovinMediationProvider.MAX
-                    )
+                    .setMediationProvider("max")
                     .build()
 
-            Log.i(TAG, "Начинаем инициализацию AppLovin SDK")
+            Log.i(TAG, "Инициализация AppLovin SDK")
 
             AppLovinSdk.getInstance(this)
-                .initialize(initializationConfig) {
-
-                    Log.i(TAG, "AppLovin SDK успешно инициализирован")
+                .initialize(initConfig) {
+                    Log.i(TAG, "AppLovin SDK инициализирован")
 
                     runOnUiThread {
                         createRewardedController()
@@ -106,19 +93,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Создание контроллера только после готовности SDK.
-     */
     private fun createRewardedController() {
-        if (isFinishing || isDestroyed) {
-            Log.w(TAG, "Activity уже закрывается, контроллер не создан")
-            return
-        }
+        if (isFinishing || isDestroyed) return
 
-        if (controllerState.value != null) {
-            Log.d(TAG, "Контроллер уже создан")
-            return
-        }
+        if (controllerState.value != null) return
 
         val adUnitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
 
@@ -135,18 +113,19 @@ class MainActivity : ComponentActivity() {
                 adUnitId = adUnitId,
 
                 onRewardGranted = {
-                    Log.i(TAG, "Callback: награда получена")
+                    Log.i(TAG, "Награда получена")
+
                     runOnUiThread {
                         onRewardCallback?.invoke()
                     }
                 },
 
                 onAdHidden = {
-                    Log.i(TAG, "Callback: реклама скрыта")
+                    Log.i(TAG, "Реклама закрыта")
                 },
 
                 onAdDisplayed = {
-                    Log.i(TAG, "Callback: реклама показана")
+                    Log.i(TAG, "Реклама показана")
                 },
 
                 autoCloser = closer
@@ -155,7 +134,7 @@ class MainActivity : ComponentActivity() {
             Log.i(TAG, "Rewarded controller создан")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Ошибка создания Rewarded controller", e)
+            Log.e(TAG, "Ошибка создания контроллера", e)
         }
     }
 
@@ -250,7 +229,6 @@ private fun AdCoinApp(
         controller
     ) {
         if (state.autoShowNext && state.infiniteMode) {
-
             if (!isActivityResumed) {
                 vm.setMessage(
                     "Награда подтверждена. Вернитесь в приложение."
@@ -260,7 +238,9 @@ private fun AdCoinApp(
 
             val activeController = controller
 
-            if (activeController == null || !activeController.isReady()) {
+            if (activeController == null ||
+                !activeController.isReady()
+            ) {
                 vm.setMessage("Ожидание готовности рекламного SDK...")
                 return@LaunchedEffect
             }
@@ -273,7 +253,9 @@ private fun AdCoinApp(
             val shown = activeController.show()
 
             if (!shown) {
-                vm.setMessage("Следующий ролик пока не готов. Ожидание MAX.")
+                vm.setMessage(
+                    "Следующий ролик пока не готов. Ожидание MAX."
+                )
             }
         }
     }
@@ -331,8 +313,8 @@ private fun DashboardScreen(
                 }
             },
             enabled = controller?.isReady() == true &&
-                    isActivityResumed &&
-                    !state.checkingReward,
+                isActivityResumed &&
+                !state.checkingReward,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
@@ -393,11 +375,12 @@ private fun PipStatus(
                         setOnErrorListener { _, what, extra ->
                             Log.e(
                                 TAG,
-                                "Ошибка воспроизведения PiP: $what / $extra"
+                                "Ошибка воспроизведения: $what / $extra"
                             )
                             true
                         }
-            },
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
