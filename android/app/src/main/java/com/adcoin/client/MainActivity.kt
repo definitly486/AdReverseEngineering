@@ -57,15 +57,10 @@ class MainActivity : ComponentActivity() {
     private val pipMode = mutableStateOf(false)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        GooglePipAdController.initialize(applicationContext)
         setContent {
-            val googlePipStatus by GooglePipAdController.status.collectAsState()
             AdCoinApp(
                 isInPip = pipMode.value,
                 onEnterPip = ::enterAppPictureInPicture,
-                googlePipStatus = googlePipStatus,
-                onShowGooglePip = { GooglePipAdController.show(this) },
-                onHideGooglePip = GooglePipAdController::hide
             )
         }
     }
@@ -108,9 +103,6 @@ class MainActivity : ComponentActivity() {
 private fun AdCoinApp(
     isInPip: Boolean,
     onEnterPip: () -> Unit,
-    googlePipStatus: String,
-    onShowGooglePip: () -> Unit,
-    onHideGooglePip: () -> Unit,
     vm: AdCoinViewModel = viewModel()
 ) {
     val state by vm.state.collectAsState()
@@ -182,9 +174,6 @@ private fun AdCoinApp(
                     onWatchAd = { controller?.show() },
                     onEnterPip = onEnterPip,
                     isActivityResumed = isActivityResumed.value,
-                    googlePipStatus = googlePipStatus,
-                    onShowGooglePip = onShowGooglePip,
-                    onHideGooglePip = onHideGooglePip
                 )
             }
         }
@@ -257,9 +246,6 @@ private fun DashboardScreen(
     onWatchAd: () -> Unit,
     onEnterPip: () -> Unit,
     isActivityResumed: Boolean,
-    googlePipStatus: String,
-    onShowGooglePip: () -> Unit,
-    onHideGooglePip: () -> Unit
 ) {
     val context = LocalContext.current
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -326,29 +312,12 @@ private fun DashboardScreen(
                     )
                 }
 
-                OutlinedButton(
-                    onClick = onShowGooglePip,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Показать рекламу Google в PiP")
-                }
-                OutlinedButton(
-                    onClick = onHideGooglePip,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Закрыть окно Google PiP")
-                }
                 Text(
-                    googlePipStatus,
+                    "Важно: AppLovin MAX Rewarded Video открывается собственным полноэкранным плеером. " +
+                        "Публичный Android SDK MAX не предоставляет видеоповерхность или API для переноса этого плеера в системное PiP. " +
+                        "Поэтому кнопка PiP для MAX здесь не имитируется: просмотр и подтверждение награды продолжают работать в штатном полноэкранном режиме.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF9DDCB1)
-                )
-                Text(
-                    "Google PiP — плавающий рекламный баннер, не видеоролик. В этом режиме AdCoin не начисляет баллы. " +
-                        "Обычный rewarded-видеопросмотр MAX и onUserRewarded остаются без изменений. " +
-                        "Для реальной рекламы замените тестовые GMA_APP_ID и GMA_PIP_AD_UNIT_ID на свои данные Google Ad Manager.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.LightGray
+                    color = Color(0xFFFFCC80)
                 )
 
                 OutlinedButton(
