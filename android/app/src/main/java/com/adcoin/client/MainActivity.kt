@@ -55,22 +55,17 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val pipMode = mutableStateOf(false)
-    private val googlePipStatus = mutableStateOf("Google PiP: инициализация…")
-    private lateinit var googlePipController: GooglePipAdController
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        googlePipController = GooglePipAdController(applicationContext) {
-            googlePipStatus.value = it
-        }
-        googlePipController.initialize()
+        GooglePipAdController.initialize(applicationContext)
         setContent {
+            val googlePipStatus by GooglePipAdController.status.collectAsState()
             AdCoinApp(
                 isInPip = pipMode.value,
                 onEnterPip = ::enterAppPictureInPicture,
-                googlePipStatus = googlePipStatus.value,
-                onShowGooglePip = { googlePipController.show(this) },
-                onHideGooglePip = googlePipController::hide
+                googlePipStatus = googlePipStatus,
+                onShowGooglePip = { GooglePipAdController.show(this) },
+                onHideGooglePip = GooglePipAdController::hide
             )
         }
     }
