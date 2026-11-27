@@ -147,7 +147,7 @@ private fun AdCoinApp(
     }
     LaunchedEffect(state.autoShowNext, state.infiniteMode, isActivityResumed.value) {
         if (state.autoShowNext && state.infiniteMode) {
-            if (!isActivityResumed.value) {
+            if (!isActivityResumed) {
                 vm.setMessage("Награда подтверждена, следующий ролик готов к запуску. Вернитесь в AdReverse: Android блокирует открытие MAX-рекламы из фона.")
             } else {
                 vm.consumeAutoShowRequest()
