@@ -119,55 +119,33 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
                 }
             }
-            // Для X используем отдельный узкий радиус 1 см и выбираем
-            // только ближайшую цель, чтобы не задевать соседние кнопки.
-            val rightRadiusPx = (1f * resources.displayMetrics.densityDpi / 2.54f)
-                .toInt().coerceAtLeast(1)
-            rightResult?.first?.let { anchor ->
-                val anchorBounds = Rect().also(anchor::getBoundsInScreen)
-                if (!anchorBounds.isEmpty) {
-                    val cx = anchorBounds.exactCenterX()
-                    val cy = anchorBounds.exactCenterY()
-                    val candidates = mutableListOf<Rect>()
-                    collectClickableTargetsAroundPoint(root, cx, cy, rightRadiusPx, candidates)
-                    val nearest = candidates.minByOrNull {
-                        val dx = it.exactCenterX() - cx
-                        val dy = it.exactCenterY() - cy
-                        dx * dx + dy * dy
-                    }
-                    tapTargets.add(nearest ?: anchorBounds)
-                    Log.i(TAG, "RIGHT_X target center=(" + cx + "," + cy + ") radiusCm=1 radiusPx=" +
-                            rightRadiusPx + " candidateCount=" + candidates.size + " selected=" + nearest)
-                }
-            }
-            // Если X отсутствует в Accessibility-дереве, пробуем точку почти
-            // в самом правом верхнем углу окна. Радиус поиска — только 1 см.
-            if (rightResult == null) {
-                val rootBounds = Rect().also(root::getBoundsInScreen)
-                if (!rootBounds.isEmpty) {
-                    val margin = (8f * resources.displayMetrics.density).toInt().coerceAtLeast(1)
-                    val x = (rootBounds.right - margin).coerceIn(rootBounds.left, rootBounds.right - 1)
-                    val y = (rootBounds.top + margin).coerceIn(rootBounds.top, rootBounds.bottom - 1)
-                    val candidates = mutableListOf<Rect>()
-                    collectClickableTargetsAroundPoint(root, x.toFloat(), y.toFloat(), rightRadiusPx, candidates)
-                    val nearest = candidates.minByOrNull {
-                        val dx = it.exactCenterX() - x
-                        val dy = it.exactCenterY() - y
-                        dx * dx + dy * dy
-                    }
-                    tapTargets.add(nearest ?: Rect(x, y, x + 1, y + 1))
-                    Log.w(TAG, "X not present in accessibility tree; top-right corner=(" + x + "," + y +
-                            ") radiusCm=1 radiusPx=" + rightRadiusPx + " candidates=" +
-                            candidates.size + " selected=" + nearest)
-                }
-            }
+            // Кнопку X самого маленького окна намеренно не нажимаем:
+            // она может перекрывать рекламные элементы и закрывать всё окно.
+            // Все найденные цели в верхнем правом углу окна отфильтруем ниже.
 
-            val uniqueTargets = tapTargets.distinctBy { it.flattenToString() }
-            if (uniqueTargets.isEmpty()) continue
+
+            val rootBounds = Rect().also(root::getBoundsInScreen)
+            val closeZoneWidth = (rootBounds.width() * 0.12f).toInt()
+            val closeZoneHeight = (rootBounds.height() * 0.12f).toInt()
+            val maxCloseControlSize = (minOf(rootBounds.width(), rootBounds.height()) * 0.18f)
+                .toInt().coerceIn(24, 120)
+            val filteredTargets = tapTargets.filterNot { target ->
+                val smallControl = target.width() in 1..maxCloseControlSize &&
+                        target.height() in 1..maxCloseControlSize
+                val atTopRight = target.right >= rootBounds.right - closeZoneWidth &&
+                        target.top <= rootBounds.top + closeZoneHeight
+                val exclude = smallControl && atTopRight
+                if (exclude) Log.i(TAG, "excluded small-window close control bounds=$target")
+                exclude
+            }
+            val uniqueTargets = filteredTargets.distinctBy { it.flattenToString() }
+            if (uniqueTargets.isEmpty()) {
+                Log.i(TAG, "no tap targets after excluding small-window close control")
+                continue
+            }
 
             val labels = listOfNotNull(
                 leftResult?.first?.let { "LEFT:${describe(it)}" },
-                rightResult?.first?.let { "RIGHT_X:${describe(it)}" }
             )
             Log.i(TAG, "corner radius taps radiusCm=10 radiusPx=$radiusPx targets=${uniqueTargets.size} " +
                     "anchors=$labels bounds=$uniqueTargets")
@@ -175,7 +153,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             dispatchTapSequence(uniqueTargets, 0)
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "corner taps radiusCm=10 targets=${uniqueTargets.size}")
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "corner taps excluding small-window X targets=${uniqueTargets.size}")
                 .apply()
             return
         }
