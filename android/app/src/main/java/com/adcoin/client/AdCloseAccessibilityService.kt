@@ -132,56 +132,56 @@ class AdCloseAccessibilityService : AccessibilityService() {
         Log.v(TAG, "armed; nothing clickable yet")
     }
 
-    /**
-     * Собирает корни всех релевантных окон.
-     * Критично для multi-window / freeform / PiP.
-     */
-    private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        val seen = mutableSetOf<Int>()
+  /**
+ * Собирает корни всех релевантных окон.
+ * Критично для multi-window / freeform / PiP.
+ */
+private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
+    val roots = mutableListOf<AccessibilityNodeInfo>()
+    val seen = mutableSetOf<Int>()
 
-        fun addIfValid(node: AccessibilityNodeInfo?) {
-            if (node == null) return
-            val pkg = node.packageName?.toString()
-            val packageOk = when {
-                expectedPackage.isNullOrBlank() ->
-                    pkg != null && pkg != packageName && pkg != "com.android.systemui"
-                else -> pkg == expectedPackage
-            }
-            if (packageOk && seen.add(System.identityHashCode(node))) {
-                roots.add(node)
-            }
+    fun addIfValid(node: AccessibilityNodeInfo?) {
+        if (node == null) return
+        val pkg = node.packageName?.toString()
+        val packageOk = when {
+            expectedPackage.isNullOrBlank() ->
+                pkg != null && pkg != packageName && pkg != "com.android.systemui"
+            else -> pkg == expectedPackage
         }
+        if (packageOk && seen.add(System.identityHashCode(node))) {
+            roots.add(node)
+        }
+    }
 
-        // 1. Активное окно
-        addIfValid(rootInActiveWindow)
+    // 1. Активное окно
+    addIfValid(rootInActiveWindow)
 
-        // 2. Все интерактивные окна
+    // 2. Все интерактивные окна
+    try {
+        windows?.forEach { window ->
+            addIfValid(window.root)
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "cannot enumerate windows", e)
+    }
+
+    // 3. Android 11+ — окна со всех дисплеев
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         try {
-            windows?.forEach { window ->
-                addIfValid(window.root)
+            val allDisplays = windowsOnAllDisplays   // SparseArray<List<AccessibilityWindowInfo>>
+            for (i in 0 until allDisplays.size()) {
+                val windowList = allDisplays.valueAt(i)
+                windowList?.forEach { window ->
+                    addIfValid(window.root)
+                }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "cannot enumerate windows", e)
+            Log.w(TAG, "cannot enumerate windowsOnAllDisplays", e)
         }
-
-        // 3. Android 11+ — окна со всех дисплеев
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                @Suppress("DEPRECATION")
-                val allDisplays = windowsOnAllDisplays
-                allDisplays?.values?.forEach { windowList ->
-                    windowList.forEach { window: AccessibilityWindowInfo ->
-                        addIfValid(window.root)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "cannot enumerate windowsOnAllDisplays", e)
-            }
-        }
-
-        return roots
     }
+
+    return roots
+}
 
     private fun dumpTree(root: AccessibilityNodeInfo) {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
