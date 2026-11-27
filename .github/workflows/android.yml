@@ -1,10 +1,13 @@
 name: Android Release Build
 
 on:
+  push:
+    branches:
+      - pip-rewarded-video
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-release-build-${{ github.ref }}
@@ -13,9 +16,10 @@ concurrency:
 jobs:
   release:
     if: github.ref == 'refs/heads/pip-rewarded-video'
-    name: Build and sign Release APK
+    name: Build and publish Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,7 +55,7 @@ jobs:
           test -s "$RUNNER_TEMP/release.keystore"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
-            - name: Build signed Release APK
+      - name: Build signed Release APK
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -61,13 +65,27 @@ jobs:
           APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
           ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
-        # Добавлен флаг -x lintVitalAnalyzeRelease для пропуска проблемного шага
-        run: gradle --no-daemon --stacktrace assembleRelease 
+        run: gradle --no-daemon --stacktrace assembleRelease
 
-      - name: Upload signed Release APK
+      - name: Upload APK as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AdCoin-pip-rewarded-video-release-${{ github.run_number }}
+          name: AdCoin-pip-rewarded-video-${{ github.run_number }}
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Latest build #${{ github.run_number }}
+          body: |
+            Автоматическая сборка ветки `pip-rewarded-video`.
+
+            Commit: ${{ github.sha }}
+          target_commitish: pip-rewarded-video
+          files: android/app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true
+          make_latest: true
+          generate_release_notes: true
