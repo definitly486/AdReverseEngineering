@@ -101,7 +101,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val rect = Rect().also(node::getBoundsInScreen)
             val label = describe(node)
 
-            val clicked = clickNodeOrParent(node)
+            val clicked = clickButtonsInRadius(node, root)
             Log.i(
                 TAG,
                 "clicked first available: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
@@ -396,37 +396,122 @@ class AdCloseAccessibilityService : AccessibilityService() {
         return false
     }
 
-    private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
-        if (node.isClickable && node.isEnabled &&
-            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    /**
+     * Нажимает все видимые кликабельные элементы в радиусе 10 см от найденной точки.
+     * Поиск и координаты строго ограничены уже проверенным маленьким окном рекламного пакета.
+     */
+    private fun clickButtonsInRadius(
+        anchor: AccessibilityNodeInfo,
+        root: AccessibilityNodeInfo
+    ): Boolean {
+        val rootBounds = Rect().also(root::getBoundsInScreen)
+        val anchorBounds = Rect().also(anchor::getBoundsInScreen)
+        if (rootBounds.isEmpty || anchorBounds.isEmpty ||
+            !rootBounds.contains(anchorBounds.centerX(), anchorBounds.centerY())
         ) {
-            return true
+            Log.w(TAG, "radius tap skipped: invalid anchor/root anchor=$anchorBounds root=$rootBounds")
+            return false
         }
 
-        var parent = node.parent
-        repeat(5) {
-            if (parent == null) return@repeat
-            if (parent.isClickable && parent.isEnabled &&
-                parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            ) {
-                return true
+        // densityDpi переводит сантиметры в физические пиксели экрана.
+        val radiusPx = (10f * resources.displayMetrics.densityDpi / 2.54f).toInt()
+        val centerX = anchorBounds.exactCenterX()
+        val centerY = anchorBounds.exactCenterY()
+        val targets = mutableListOf<Rect>()
+        val seen = mutableSetOf<String>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            if (current.isVisibleToUser && current.isEnabled && current.isClickable) {
+                val bounds = Rect().also(current::getBoundsInScreen)
+                if (!bounds.isEmpty && rootBounds.contains(bounds) &&
+                    bounds.width() >= 8 && bounds.height() >= 8
+                ) {
+                    val dx = bounds.exactCenterX() - centerX
+                    val dy = bounds.exactCenterY() - centerY
+                    if (dx * dx + dy * dy <= radiusPx.toFloat() * radiusPx &&
+                        seen.add(bounds.flattenToString())
+                    ) {
+                        targets.add(bounds)
+                    }
+                }
             }
-            parent = parent.parent
+
+            for (i in 0 until current.childCount) {
+                current.getChild(i)?.let { queue.add(it) }
+            }
         }
 
-        // Некоторые рекламные окна рисуют X как ImageView и не поддерживают ACTION_CLICK.
-        // В таком случае посылаем один координатный тап в центр найденного элемента.
-        val target = Rect().also(node::getBoundsInScreen)
-        if (target.isEmpty || target.width() <= 0 || target.height() <= 0) return false
+        if (targets.isEmpty()) {
+            // У ImageView может не быть собственного clickable, поэтому пробуем ближайшего
+            // кликабельного предка, но только если его центр также попадает в радиус.
+            var parent = anchor.parent
+            repeat(5) {
+                if (parent == null) return@repeat
+                if (parent.isVisibleToUser && parent.isEnabled && parent.isClickable) {
+                    val bounds = Rect().also(parent::getBoundsInScreen)
+                    val dx = bounds.exactCenterX() - centerX
+                    val dy = bounds.exactCenterY() - centerY
+                    if (!bounds.isEmpty && rootBounds.contains(bounds) &&
+                        dx * dx + dy * dy <= radiusPx.toFloat() * radiusPx
+                    ) {
+                        targets.add(bounds)
+                        return@repeat
+                    }
+                }
+                parent = parent.parent
+            }
+        }
+
+        if (targets.isEmpty()) {
+            Log.w(TAG, "radius tap found no clickable controls radiusPx=$radiusPx anchor=$anchorBounds")
+            return false
+        }
+
+        Log.i(TAG, "radius tap: controls=${targets.size} radiusCm=10 radiusPx=$radiusPx " +
+                "center=(${anchorBounds.centerX()},${anchorBounds.centerY()}) targets=$targets")
+        dispatchTapSequence(targets, 0)
+        return true
+    }
+
+    /** Отправляет отдельные тапы последовательно, чтобы Android обработал каждый как нажатие. */
+    private fun dispatchTapSequence(targets: List<Rect>, index: Int) {
+        if (index >= targets.size) {
+            Log.i(TAG, "radius tap sequence completed controls=${targets.size}")
+            return
+        }
+
+        val target = targets[index]
         val x = target.exactCenterX()
         val y = target.exactCenterY()
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 90))
             .build()
-        val dispatched = dispatchGesture(gesture, null, null)
-        Log.i(TAG, "coordinate tap dispatched=$dispatched x=$x y=$y target=$target")
-        return dispatched
+
+        val dispatched = dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    Log.i(TAG, "radius tap completed index=${index + 1}/${targets.size} x=$x y=$y")
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 120)
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    Log.w(TAG, "radius tap cancelled index=${index + 1}/${targets.size}")
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 180)
+                }
+            },
+            null
+        )
+
+        Log.i(TAG, "radius tap dispatched index=${index + 1}/${targets.size} dispatched=$dispatched " +
+                "x=$x y=$y target=$target")
+        if (!dispatched) {
+            mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 180)
+        }
     }
 
     override fun onInterrupt() = Unit
