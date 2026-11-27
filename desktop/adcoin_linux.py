@@ -119,23 +119,26 @@ class BalanceWorker(QObject):
         super().__init__(); self.session = session
     def run(self):
         try:
-            token = self.session["access_token"]
-            # Reuse the already saved access token. No email/code login is needed.
-            user_data = {}
-            try:
-                user_data = api_request("POST", f"{API}/adcoin/getUserData", token=token,
-                    body={"accessToken": token, "versionName": "Linux", "versionCode": 1,
-                          "androidSDK": 0, "lang": "en", "country": "",
-                          "messagingToken": None, "simCountryIso": None, "currencyCode": "USD"})
-            except requests.RequestException:
-                pass
-            result = {"userData": user_data}
-            result["userId"] = (find_user_id(user_data))
-            result["updateData"] = api_request("POST", f"{API}/adcoin/updateData", token=token,
+            token = (self.session.get("access_token")
+                     or (self.session.get("raw_response") or {}).get("accessToken"))
+            if not token:
+                raise RuntimeError("В сохранённой сессии отсутствует accessToken.")
+            api = (self.session.get("api_base") or API).rstrip("/")
+            # Reuse the saved token and API host from the existing session.
+            user_data = api_request("POST", f"{api}/adcoin/getUserData", token=token,
+                body={"accessToken": token, "versionName": "Linux", "versionCode": 1,
+                      "androidSDK": 0, "lang": "en", "country": "",
+                      "messagingToken": None, "simCountryIso": None, "currencyCode": "USD"})
+            user = user_data.get("user", {}) if isinstance(user_data, dict) else {}
+            result = {"userData": user_data, "user": user}
+            result["userId"] = (str(user.get("userId")) if isinstance(user, dict)
+                                and user.get("userId") is not None else find_user_id(user_data))
+            result["updateData"] = api_request("POST", f"{api}/adcoin/updateData", token=token,
                 body={"token": token, "deviceId": self.session.get("device_id", ""),
                       "advertisingId": self.session.get("advertising_id", ""), "messagingToken": None})
-            for key, url in (("fullStats", f"{API}/user/ownProfile/fullStats/get/{token}"),
-                             ("withdrawal", f"{API}/withdrawal/methods/get/{token}")):
+            encoded_token = requests.utils.quote(token, safe="")
+            for key, url in (("fullStats", f"{api}/user/ownProfile/fullStats/get/{encoded_token}"),
+                             ("withdrawal", f"{api}/withdrawal/methods/get/{encoded_token}")):
                 try: result[key] = api_request("GET", url, token=token)
                 except requests.RequestException as exc: result[key] = {"error": str(exc)}
             result["userId"] = result.get("userId") or find_user_id(result.get("fullStats")) or find_user_id(result.get("updateData")) or find_user_id(result.get("withdrawal"))
@@ -295,11 +298,16 @@ class MainWindow(QMainWindow):
 
     def show_data(self, data):
         update, stats, wd = data.get("updateData") or {}, data.get("fullStats") or {}, data.get("withdrawal") or {}
-        self.user_id_label.setText(f"AdCoin userId: {data.get('userId') or 'не найден'}")
-        self.balance.setText(f"Баланс: {update.get('cash', '—')}")
+        user = data.get("user") or {}
+        user_id = data.get("userId") or "не найден"
+        self.user_id_label.setText(f"AdCoin userId: {user_id}")
+        cash = update.get("cash")
+        if cash is None:
+            cash = user.get("balance")
+        self.balance.setText(f"Баланс: {cash if cash is not None else '—'}")
         self.earnings.setText(f"Заработано: {stats.get('earnings', '—')}")
         self.withdrawal.setText(f"Доступно к выводу: {wd.get('balance', '—')}")
-        self.status.setText("Данные обновлены" if "error" not in update else f"Ошибка API: {update['error']}")
+        self.status.setText(f"Аккаунт AdCoin подключён: {user.get('email') or self.session.get('email', '')}")
 
     def show_error(self, message):
         self.status.setText("Не удалось обновить данные"); QMessageBox.warning(self, "Ошибка AdCoin", message)
