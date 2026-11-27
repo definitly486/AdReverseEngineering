@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Rational
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -67,14 +68,38 @@ class MainActivity : ComponentActivity() {
 
     private fun enterAppPictureInPicture() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            Toast.makeText(this, "PiP требует Android 8.0 или новее", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Плавающее окно PiP требует Android 8.0 или новее", Toast.LENGTH_LONG).show()
             return
         }
 
-        val params = android.app.PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .build()
-        enterPictureInPictureMode(params)
+        val activityManager = getSystemService(android.app.ActivityManager::class.java)
+        if (activityManager?.isPictureInPictureSupported != true) {
+            Toast.makeText(
+                this,
+                "Android сообщает, что режим PiP не поддерживается или отключён на этом устройстве",
+                Toast.LENGTH_LONG
+            ).show()
+            Log.w("AdReverse.PiP", "Picture-in-picture is not supported by the device")
+            return
+        }
+
+        try {
+            val params = android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+            val entered = enterPictureInPictureMode(params)
+            Log.i("AdReverse.PiP", "enterPictureInPictureMode returned: $entered")
+            if (!entered) {
+                Toast.makeText(
+                    this,
+                    "Android не разрешил свернуть AdReverse в PiP. Проверьте разрешение «Картинка в картинке» для приложения.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (e: Exception) {
+            Log.e("AdReverse.PiP", "Failed to enter picture-in-picture mode", e)
+            Toast.makeText(this, "Не удалось включить PiP: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 }
 
