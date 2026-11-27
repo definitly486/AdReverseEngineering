@@ -332,7 +332,7 @@ private fun AdCoinApp(
 ) {
     val state by vm.state.collectAsState()
 
-    if (showAccessibilityWarning && !accessibilityServiceEnabled) {
+    if (!isInPip && showAccessibilityWarning && !accessibilityServiceEnabled) {
         AlertDialog(
             onDismissRequest = onDismissAccessibilityWarning,
             title = { Text("Требуется специальное разрешение") },
@@ -372,10 +372,6 @@ private fun AdCoinApp(
                 onEnterPip = onEnterPip,
                 onExitPip = onExitPip,
                 isActivityResumed = isActivityResumed,
-                accessibilityServiceEnabled = accessibilityServiceEnabled,
-                showAccessibilityWarning = showAccessibilityWarning,
-                onOpenAccessibilitySettings = onOpenAccessibilitySettings,
-                onDismissAccessibilityWarning = onDismissAccessibilityWarning,
                 onLaunchFreeform = onLaunchFreeform
             )
         } else {
@@ -429,10 +425,6 @@ private fun DashboardScreen(
     onEnterPip: (File?) -> Unit,
     onExitPip: () -> Unit,
     isActivityResumed: Boolean,
-    accessibilityServiceEnabled: Boolean,
-    showAccessibilityWarning: Boolean,
-    onOpenAccessibilitySettings: () -> Unit,
-    onDismissAccessibilityWarning: () -> Unit,
     onLaunchFreeform: () -> Unit
 ) {
     Column(
