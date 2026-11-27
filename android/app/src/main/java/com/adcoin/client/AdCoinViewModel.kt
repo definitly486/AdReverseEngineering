@@ -228,6 +228,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             }
             val wasInfinite = _state.value.infiniteMode
             val completed = _state.value.videosCompleted + if (credited) 1 else 0
+            backgroundPrefs.edit().putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, completed).apply()
             _state.value = _state.value.copy(
                 checkingReward = false,
                 rewardInFlight = false,
