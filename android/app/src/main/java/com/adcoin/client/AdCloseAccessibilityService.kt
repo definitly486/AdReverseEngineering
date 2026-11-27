@@ -4,12 +4,19 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Path
 import android.graphics.Rect
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Color
+import android.graphics.PixelFormat
 import android.accessibilityservice.GestureDescription
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -33,6 +40,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private var lastTreeDumpAt = 0L
     private var armedAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var tapMarkerView: TapMarkerView? = null
+    private var tapMarkerRemove: Runnable? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -96,35 +105,38 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }
 
         for (root in roots) {
-            val result = findFirstTarget(root) ?: continue
-            val (node, isGooglePlay) = result
-            val rect = Rect().also(node::getBoundsInScreen)
-            val label = describe(node)
+            // Сохраняем существующий поиск слева и дополнительно ищем область X справа.
+            val leftResult = findCornerTarget(root, topRight = false)
+            val rightResult = findCornerTarget(root, topRight = true)
+            if (leftResult == null && rightResult == null) continue
 
-            val clicked = clickNodeOrParent(node)
-            Log.i(
-                TAG,
-                "clicked first available: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
-                        "label=$label bounds=$rect success=$clicked"
+            val radiusPx = (10f * resources.displayMetrics.densityDpi / 2.54f).toInt()
+            val tapTargets = mutableListOf<Rect>()
+            leftResult?.first?.let { collectClickableTargetsInRadius(it, root, radiusPx, tapTargets) }
+            rightResult?.first?.let { collectClickableTargetsInRadius(it, root, radiusPx, tapTargets) }
+
+            // Если в радиусе нет clickable-узлов (например, X нарисована как ImageView),
+            // всё равно отправляем координатный тап в центр найденного визуального элемента.
+            if (tapTargets.isEmpty()) {
+                leftResult?.first?.let { Rect().also(it::getBoundsInScreen).takeUnless(Rect::isEmpty)?.let(tapTargets::add) }
+                rightResult?.first?.let { Rect().also(it::getBoundsInScreen).takeUnless(Rect::isEmpty)?.let(tapTargets::add) }
+            }
+            val uniqueTargets = tapTargets.distinctBy { it.flattenToString() }
+            if (uniqueTargets.isEmpty()) continue
+
+            val labels = listOfNotNull(
+                leftResult?.first?.let { "LEFT:${describe(it)}" },
+                rightResult?.first?.let { "RIGHT_X:${describe(it)}" }
             )
+            Log.i(TAG, "corner radius taps radiusCm=10 radiusPx=$radiusPx targets=${uniqueTargets.size} " +
+                    "anchors=$labels bounds=$uniqueTargets")
 
+            dispatchTapSequence(uniqueTargets, 0)
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(
-                    AdAutoCloser.KEY_LAST_RESULT,
-                    "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked"
-                )
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "corner taps radiusCm=10 targets=${uniqueTargets.size}")
                 .apply()
-
-            if (clicked) {
-                if (isGooglePlay) {
-                    mainHandler.postDelayed({
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        Log.i(TAG, "pressed BACK after Google Play click")
-                    }, 350)
-                }
-                return
-            }
+            return
         }
 
         Log.v(TAG, "armed; nothing clickable yet")
@@ -217,7 +229,10 @@ class AdCloseAccessibilityService : AccessibilityService() {
         Log.i(TAG, "TREE_DIAG_END nodes=$count")
     }
 
-    private fun findFirstTarget(root: AccessibilityNodeInfo): Pair<AccessibilityNodeInfo, Boolean>? {
+    private fun findCornerTarget(
+        root: AccessibilityNodeInfo,
+        topRight: Boolean
+    ): Pair<AccessibilityNodeInfo, Boolean>? {
         val rootRect = Rect().also(root::getBoundsInScreen)
         if (rootRect.isEmpty || rootRect.width() >= SMALL_WINDOW_MAX_SIZE ||
             rootRect.height() >= SMALL_WINDOW_MAX_SIZE
@@ -235,12 +250,16 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val node = queue.removeFirst()
             val className = node.className?.toString().orEmpty()
             val isImageTarget = className.contains("Image", ignoreCase = true)
+            val inCorner = if (topRight) isInTopRightCorner(node, root)
+                           else isInTopLeftCorner(node, root)
+
             if (node.isVisibleToUser &&
                 (node.isEnabled || isImageTarget) &&
                 (node.isClickable || hasClickableParent(node) || isImageTarget) &&
-                isInTopLeftCorner(node, root)
+                inCorner
             ) {
-                val score = scoreTopLeftCandidate(node, root)
+                val score = if (topRight) scoreCloseCandidate(node, root)
+                            else scoreTopLeftCandidate(node, root)
                 if (score > bestScore) {
                     bestScore = score
                     bestCandidate = node
@@ -254,13 +273,177 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         if (bestCandidate != null) {
             val rect = Rect().also(bestCandidate::getBoundsInScreen)
-            Log.i(TAG, "small-window top-left target selected bounds=$rect score=$bestScore")
+            Log.i(TAG, "${if (topRight) "top-right X" else "top-left"} target selected bounds=$rect score=$bestScore")
             return bestCandidate to false
         }
 
-        Log.v(TAG, "no clickable target in small-window top-left area")
+        Log.v(TAG, "no target in ${if (topRight) "top-right" else "top-left"} corner")
         return null
     }
+
+    /**
+     * Собирает видимые кликабельные элементы в радиусе 10 см от найденной точки.
+     * Все координаты дополнительно ограничены bounds проверенного рекламного окна.
+     */
+    private fun collectClickableTargetsInRadius(
+        anchor: AccessibilityNodeInfo,
+        root: AccessibilityNodeInfo,
+        radiusPx: Int,
+        output: MutableList<Rect>
+    ) {
+        val rootBounds = Rect().also(root::getBoundsInScreen)
+        val anchorBounds = Rect().also(anchor::getBoundsInScreen)
+        if (rootBounds.isEmpty || anchorBounds.isEmpty ||
+            !rootBounds.contains(anchorBounds.centerX(), anchorBounds.centerY())
+        ) return
+
+        val centerX = anchorBounds.exactCenterX()
+        val centerY = anchorBounds.exactCenterY()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            if (current.isVisibleToUser && current.isEnabled && current.isClickable) {
+                val bounds = Rect().also(current::getBoundsInScreen)
+                if (!bounds.isEmpty && rootBounds.contains(bounds) &&
+                    bounds.width() >= 8 && bounds.height() >= 8
+                ) {
+                    val dx = bounds.exactCenterX() - centerX
+                    val dy = bounds.exactCenterY() - centerY
+                    if (dx * dx + dy * dy <= radiusPx.toFloat() * radiusPx) {
+                        output.add(bounds)
+                    }
+                }
+            }
+            for (i in 0 until current.childCount) {
+                current.getChild(i)?.let { queue.add(it) }
+            }
+        }
+    }
+
+    /** Последовательно отправляет координатные тапы и показывает маркер каждого тапа. */
+    private fun dispatchTapSequence(targets: List<Rect>, index: Int) {
+        if (index >= targets.size) {
+            Log.i(TAG, "corner tap sequence completed targets=${targets.size}")
+            return
+        }
+
+        val target = targets[index]
+        val x = target.exactCenterX()
+        val y = target.exactCenterY()
+        showTapMarker(x, y)
+
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 90))
+            .build()
+
+        val dispatched = dispatchGesture(
+            gesture,
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    Log.i(TAG, "corner tap completed index=${index + 1}/${targets.size} x=$x y=$y")
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 140)
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    Log.w(TAG, "corner tap cancelled index=${index + 1}/${targets.size}")
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 180)
+                }
+            },
+            null
+        )
+        Log.i(TAG, "corner tap dispatched index=${index + 1}/${targets.size} dispatched=$dispatched x=$x y=$y")
+        if (!dispatched) {
+            mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 180)
+        }
+    }
+
+    /** Некликабельный маркер поверх экрана; TYPE_ACCESSIBILITY_OVERLAY не требует overlay permission. */
+    private fun showTapMarker(screenX: Float, screenY: Float) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { showTapMarker(screenX, screenY) }
+            return
+        }
+
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        val density = resources.displayMetrics.density
+        val size = (56f * density).toInt()
+        val marker = tapMarkerView ?: TapMarkerView().also { tapMarkerView = it }
+
+        try {
+            if (marker.parent == null) {
+                val params = WindowManager.LayoutParams(
+                    size, size,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                ).apply {
+                    gravity = Gravity.TOP or Gravity.LEFT
+                    x = screenX.toInt() - size / 2
+                    y = screenY.toInt() - size / 2
+                    title = "AdReverse tap indicator"
+                }
+                wm.addView(marker, params)
+            } else {
+                val params = marker.layoutParams as WindowManager.LayoutParams
+                params.x = screenX.toInt() - size / 2
+                params.y = screenY.toInt() - size / 2
+                wm.updateViewLayout(marker, params)
+                marker.invalidate()
+            }
+
+            tapMarkerRemove?.let(mainHandler::removeCallbacks)
+            val remove = Runnable {
+                try {
+                    if (marker.parent != null) wm.removeView(marker)
+                } catch (e: Exception) {
+                    Log.w(TAG, "tap marker remove failed", e)
+                }
+                if (tapMarkerView === marker) tapMarkerView = null
+                tapMarkerRemove = null
+            }
+            tapMarkerRemove = remove
+            mainHandler.postDelayed(remove, TAP_MARKER_VISIBLE_MS)
+            Log.i(TAG, "tap marker shown x=${screenX.toInt()} y=${screenY.toInt()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "tap marker display failed", e)
+        }
+    }
+
+    private inner class TapMarkerView : View(this@AdCloseAccessibilityService) {
+        private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = 5f * resources.displayMetrics.density
+        }
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.YELLOW
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * resources.displayMetrics.density
+        }
+        private val center = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.RED
+            style = Paint.Style.FILL
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val cx = width / 2f
+            val cy = height / 2f
+            val density = resources.displayMetrics.density
+            val radius = 19f * density
+            canvas.drawCircle(cx, cy, radius, outline)
+            canvas.drawCircle(cx, cy, radius, ring)
+            canvas.drawLine(cx - 25f * density, cy, cx + 25f * density, cy, outline)
+            canvas.drawLine(cx, cy - 25f * density, cx, cy + 25f * density, outline)
+            canvas.drawCircle(cx, cy, 4.5f * density, center)
+        }
+    }
+
 
     private fun hasCloseImageChild(parent: AccessibilityNodeInfo): Boolean {
         val parentRect = Rect().also(parent::getBoundsInScreen)
@@ -438,6 +621,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val MAX_DIAGNOSTIC_NODES = 80
         private const val AGGRESSIVE_AFTER_MS = 8_000L
         private const val SMALL_WINDOW_MAX_SIZE = 1100
+        private const val TAP_MARKER_VISIBLE_MS = 550L
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
