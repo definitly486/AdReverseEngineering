@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MaxRewardedController(
     private val activity: Activity,
     private val adUnitId: String,
-    private val onRewardGranted: () -> Unit,
+    private val onRewardGranted: (MaxReward) -> Unit,
     private val onAdLoaded: () -> Unit,
     private val onAdHidden: () -> Unit,
     private val onAdDisplayed: () -> Unit,
@@ -209,6 +209,6 @@ class MaxRewardedController(
 
     override fun onUserRewarded(ad: MaxAd, reward: MaxReward) {
         Log.i("AdCoin.MaxRewarded", "User rewarded: ${reward.label} - ${reward.amount}")
-        onRewardGranted()
+        onRewardGranted(reward)
     }
 }
