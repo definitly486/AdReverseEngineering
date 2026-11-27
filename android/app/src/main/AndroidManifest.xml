@@ -33,8 +33,7 @@
             android:resizeableActivity="true" />
         <activity
             android:name="com.applovin.adview.AppLovinFullscreenImmersiveActivity"
-            android:resizeableActivity="true"
-            android:supportsPictureInPicture="true" />
+            android:resizeableActivity="true" />
 
         <service
             android:name=".BackgroundViewingService"
