@@ -2,33 +2,27 @@ name: Android Release
 
 on:
   push:
-    branches: [app, app2]
+    branches: [background]
   workflow_dispatch:
-    inputs:
-      publish_release:
-        description: Publish the signed APK as a GitHub Release
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: write
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-release-background
   cancel-in-progress: false
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/app' || github.ref == 'refs/heads/app2'
+    if: github.ref == 'refs/heads/background'
     name: Build, sign and publish APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout source branch
+      - name: Checkout background branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: background
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -81,37 +75,29 @@ jobs:
         id: release
         env:
           VERSION_CODE: ${{ steps.version.outputs.code }}
-          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p dist
           APK="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          cp "$APK" "dist/AdCoin-${BRANCH}-${VERSION_CODE}.apk"
-          echo "version=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          if [ "$BRANCH" = "app2" ]; then
-            echo "tag=app2-v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-            echo "name=AdCoin app2 v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-            echo "name=AdCoin v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
-          fi
+          cp "$APK" "dist/AdCoin-background-${VERSION_CODE}.apk"
+          echo "tag=background-v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "name=AdCoin background v${VERSION_CODE}" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AdCoin-${{ github.ref_name }}-release-${{ steps.release.outputs.version }}
+          name: AdCoin-background-release-${{ steps.version.outputs.code }}
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub Release
-        if: github.event_name == 'push' || inputs.publish_release
+      - name: Publish GitHub Release as latest
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: ${{ steps.release.outputs.name }}
-          target_commitish: ${{ github.ref_name }}
+          target_commitish: background
           generate_release_notes: true
           files: dist/*.apk
           fail_on_unmatched_files: true
