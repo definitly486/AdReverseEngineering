@@ -160,7 +160,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(
             screenMode = mode,
             message = if (mode == BackgroundViewingService.SCREEN_MODE_DIM) {
-                "Режим: тусклый экран. Дисплей останется включённым на минимальной яркости."
+                "Режим: тусклый экран. Дисплей останется включённым на пониженной яркости."
             } else {
                 "Режим: экран может выключаться. Фоновая сессия сохраняется; показ MAX продолжится после разблокировки."
             }
