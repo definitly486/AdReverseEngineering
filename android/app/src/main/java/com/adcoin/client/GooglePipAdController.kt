@@ -16,20 +16,26 @@ import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAdOptions
 import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAdPresentationScope
 import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAdPosition
 import com.google.android.libraries.ads.mobile.sdk.pip.PictureInPictureAdRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Google Ad Manager PiP banner integration.
+ * App-scoped Google Ad Manager PiP banner integration.
  *
- * This is intentionally separate from AppLovin MAX Rewarded. Google PiP is a
- * banner format (not a rewarded video), so it never calls AdCoin reward APIs.
+ * Kept separate from AppLovin MAX Rewarded. Google PiP is a banner format,
+ * not a rewarded video, and this controller never calls AdCoin reward APIs.
  */
 @OptIn(ExperimentalApi::class)
-class GooglePipAdController(
-    context: Context,
-    private val onStatus: (String) -> Unit
-) {
-    private val appContext = context.applicationContext
+object GooglePipAdController {
+    private const val TAG = "AdReverse.GooglePiP"
+
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val mutableStatus = MutableStateFlow("Google PiP: инициализация…")
+    val status: StateFlow<String> = mutableStatus.asStateFlow()
+
+    @Volatile
+    private var appContext: Context? = null
 
     @Volatile
     private var pipAd: PictureInPictureAd? = null
@@ -40,7 +46,8 @@ class GooglePipAdController(
     @Volatile
     private var loading = false
 
-    fun initialize() {
+    fun initialize(context: Context) {
+        appContext = context.applicationContext
         if (initialized) {
             load()
             return
@@ -49,19 +56,19 @@ class GooglePipAdController(
         Thread {
             try {
                 MobileAds.initialize(
-                    appContext,
+                    appContext!!,
                     InitializationConfig.Builder(BuildConfig.GMA_APP_ID).build()
                 ) {
                     initialized = true
                     mainHandler.post {
-                        onStatus("Google PiP: SDK готов, загружаем объявление…")
+                        setStatus("Google PiP: SDK готов, загружаем объявление…")
                         load()
                     }
                 }
             } catch (error: Exception) {
                 Log.e(TAG, "Google Mobile Ads initialization failed", error)
                 mainHandler.post {
-                    onStatus("Google PiP: ошибка инициализации — ${error.message}")
+                    setStatus("Google PiP: ошибка инициализации — ${error.message}")
                 }
             }
         }.start()
@@ -70,7 +77,7 @@ class GooglePipAdController(
     fun load() {
         if (!initialized || loading || pipAd != null) return
         loading = true
-        mainHandler.post { onStatus("Google PiP: загружаем тестовое объявление…") }
+        mainHandler.post { setStatus("Google PiP: загружаем тестовое объявление…") }
 
         val request = PictureInPictureAdRequest.Builder(BuildConfig.GMA_PIP_AD_UNIT_ID).build()
         PictureInPictureAd.load(
@@ -81,13 +88,16 @@ class GooglePipAdController(
                     pipAd = ad
                     ad.adEventCallback = object : PictureInPictureAdEventCallback {
                         override fun onAdShown() {
-                            mainHandler.post { onStatus("Google PiP: объявление отображается поверх приложений") }
+                            mainHandler.post { setStatus("Google PiP: объявление отображается поверх приложений") }
                         }
 
                         override fun onAdHidden() {
-                            mainHandler.post { onStatus("Google PiP: окно закрыто") }
-                            pipAd = null
-                            ad.destroy()
+                            mainHandler.post {
+                                setStatus("Google PiP: окно закрыто, загружаем следующее объявление…")
+                                if (pipAd === ad) pipAd = null
+                                ad.destroy()
+                                load()
+                            }
                         }
 
                         override fun onAdImpression() {
@@ -108,20 +118,20 @@ class GooglePipAdController(
 
                         override fun onAdFailedToShowFullScreenContent(error: com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError) {
                             Log.e(TAG, "Google PiP failed to show: $error")
-                            mainHandler.post { onStatus("Google PiP: не удалось показать объявление — $error") }
+                            mainHandler.post { setStatus("Google PiP: не удалось показать объявление — $error") }
                         }
 
                         override fun onAdPaid(value: com.google.android.libraries.ads.mobile.sdk.common.AdValue) {
                             Log.d(TAG, "Google PiP paid: ${value.valueMicros} ${value.currencyCode}")
                         }
                     }
-                    mainHandler.post { onStatus("Google PiP: объявление готово к показу") }
+                    mainHandler.post { setStatus("Google PiP: объявление готово к показу") }
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
                     loading = false
                     Log.w(TAG, "Google PiP failed to load: $error")
-                    mainHandler.post { onStatus("Google PiP: объявление недоступно — $error") }
+                    mainHandler.post { setStatus("Google PiP: объявление недоступно — $error") }
                 }
             }
         )
@@ -130,8 +140,8 @@ class GooglePipAdController(
     fun show(activity: Activity) {
         val ad = pipAd
         if (ad == null) {
-            onStatus("Google PiP: объявление ещё не загружено")
-            if (initialized) load() else initialize()
+            setStatus("Google PiP: объявление ещё не загружено")
+            if (initialized) load() else initialize(activity.applicationContext)
             return
         }
 
@@ -143,7 +153,7 @@ class GooglePipAdController(
             ad.show(activity, options)
         } catch (error: Exception) {
             Log.e(TAG, "Google PiP show failed", error)
-            onStatus("Google PiP: ошибка показа — ${error.message}")
+            setStatus("Google PiP: ошибка показа — ${error.message}")
         }
     }
 
@@ -151,13 +161,8 @@ class GooglePipAdController(
         pipAd?.hide()
     }
 
-    fun destroy() {
-        pipAd?.destroy()
-        pipAd = null
-        loading = false
-    }
-
-    companion object {
-        private const val TAG = "AdReverse.GooglePiP"
+    private fun setStatus(message: String) {
+        mutableStatus.value = message
+        Log.i(TAG, message)
     }
 }
