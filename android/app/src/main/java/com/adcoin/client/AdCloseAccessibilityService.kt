@@ -394,7 +394,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     Log.i(TAG, "corner tap completed index=${index + 1}/${targets.size} x=$x y=$y")
-                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 400)
+                    mainHandler.postDelayed({ dispatchTapSequence(targets, index + 1) }, 700)
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
@@ -528,8 +528,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private fun isInTopRightCorner(
         node: AccessibilityNodeInfo,
         root: AccessibilityNodeInfo,
-        rightPercent: Float = 0.32f,
-        topPercent: Float = 0.28f
+        rightPercent: Float = 0.12f,
+        topPercent: Float = 0.12f
     ): Boolean {
         val nodeRect = Rect().also(node::getBoundsInScreen)
         val rootRect = Rect().also(root::getBoundsInScreen)
@@ -538,9 +538,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * rightPercent)
         val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * topPercent)
 
-        val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.28f)
+        val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.18f)
             .toInt()
-            .coerceIn(36, 200)
+            .coerceIn(24, 120)
         val sizeOk = nodeRect.width() in 8..maxSize && nodeRect.height() in 8..maxSize
 
         return nearRight && nearTop && sizeOk
