@@ -13,28 +13,58 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
 API = "https://api.adcoinapp.com"
+API6 = "https://adcoinapi.su"
 STATE = Path.home() / ".config" / "adcoin" / "session.json"
-HEADERS = {"Accept": "application/json", "User-Agent": "ktor-client"}
+USER_AGENT = "ktor-client"
+
+def build_session(access_token: str | None = None) -> requests.Session:
+    session = requests.Session()
+    session.headers.update({
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/json",
+    })
+    if access_token:
+        session.headers["Authorization"] = f"Bearer {access_token}"
+        session.headers["X-Access-Token"] = access_token
+    return session
 
 def save_session(data: dict[str, Any]) -> None:
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    STATE.chmod(0o600)
-    STATE.parent.chmod(0o700)
+    try:
+        STATE.chmod(0o600)
+        STATE.parent.chmod(0o700)
+    except OSError:
+        pass
 
 def load_session() -> dict[str, Any]:
     try: return json.loads(STATE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError): return {}
 
-def api_request(method: str, url: str, *, body: dict | None = None, token: str = "") -> Any:
-    headers = dict(HEADERS)
-    headers["Content-Type"] = "application/json"
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-        headers["X-Access-Token"] = token
-    response = requests.request(method, url, json=body, headers=headers, timeout=(15, 45))
-    response.raise_for_status()
-    return response.json() if response.content else None
+def request_json(session: requests.Session, method: str, url: str,
+                 *, json_body: dict[str, Any] | None = None) -> Any:
+    response = session.request(method, url, json=json_body, timeout=(15, 45))
+    if not response.ok:
+        try:
+            details = json.dumps(response.json(), ensure_ascii=False, indent=2)
+        except ValueError:
+            details = response.text[:2000]
+        raise requests.HTTPError(
+            f"HTTP {response.status_code} {method} {url}: {details}",
+            response=response,
+        )
+    if not response.content:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return {"_raw": response.text[:4000]}
+
+def api_request(method: str, url: str, *, body: dict | None = None,
+                token: str = "", session: requests.Session | None = None) -> Any:
+    client = session or build_session(token)
+    return request_json(client, method, url, json_body=body)
 
 class LoginDialog(QDialog):
     def __init__(self, parent=None):
@@ -85,8 +115,21 @@ class LoginDialog(QDialog):
             token = (result.get("accessToken") or result.get("access_token")) if isinstance(result, dict) else None
             if not token:
                 QMessageBox.warning(self, "Вход не выполнен", f"Сервер не вернул accessToken:\n{result}"); return
-            save_session({"access_token": token, "email": email, "source": "email",
-                "device_id": self.device_id, "advertising_id": self.advertising_id, "api_base": API})
+            from datetime import datetime, timezone
+            save_session({
+                "access_token": token,
+                "can_enter_ref_code": result.get("canEnterRefCode"),
+                "source": "email",
+                "email": email,
+                "login_url": f"{API}/login/validateCode",
+                "device_id": self.device_id,
+                "advertising_id": self.advertising_id,
+                "referrer": "",
+                "raw_response": result,
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "api6_base": API6,
+                "api_base": API,
+            })
             self.accept()
         except requests.RequestException as exc: QMessageBox.critical(self, "Ошибка входа", str(exc))
         finally: self.login_button.setEnabled(True)
@@ -115,35 +158,67 @@ def find_user_id(value: Any, depth: int = 0) -> str | None:
 
 class BalanceWorker(QObject):
     finished, failed = Signal(dict), Signal(str)
+
     def __init__(self, session: dict):
-        super().__init__(); self.session = session
+        super().__init__()
+        self.session = session
+
     def run(self):
         try:
-            token = (self.session.get("access_token")
-                     or (self.session.get("raw_response") or {}).get("accessToken"))
+            token = self.session.get("access_token") or (
+                self.session.get("raw_response") or {}).get("accessToken")
             if not token:
                 raise RuntimeError("В сохранённой сессии отсутствует accessToken.")
+
             api = (self.session.get("api_base") or API).rstrip("/")
-            # Reuse the saved token and API host from the existing session.
-            user_data = api_request("POST", f"{api}/adcoin/getUserData", token=token,
-                body={"accessToken": token, "versionName": "Linux", "versionCode": 1,
-                      "androidSDK": 0, "lang": "en", "country": "",
-                      "messagingToken": None, "simCountryIso": None, "currencyCode": "USD"})
+            client = build_session(token)
+            results: dict[str, Any] = {}
+
+            # Профиль и userId из основного API.
+            results["userData"] = request_json(client, "POST",
+                f"{api}/adcoin/getUserData", json_body={
+                    "accessToken": token,
+                    "versionName": "2.0.0",
+                    "versionCode": "1",
+                    "androidSDK": 0,
+                    "lang": "en",
+                    "country": "",
+                    "messagingToken": None,
+                    "simCountryIso": None,
+                    "currencyCode": "USD",
+                })
+
+            # Эти запросы перенесены из рабочего cmd_balance без смены API.
+            device_id = self.session.get("device_id") or str(uuid.uuid4())
+            advertising_id = self.session.get("advertising_id") or str(uuid.uuid4())
+            results["updateData"] = request_json(client, "POST",
+                f"{api}/adcoin/updateData", json_body={
+                    "token": token,
+                    "deviceId": device_id,
+                    "advertisingId": advertising_id,
+                    "messagingToken": None,
+                })
+
+            results["fullStats"] = request_json(client, "GET",
+                f"{api}/user/ownProfile/fullStats/get/{token}")
+
+            try:
+                results["withdrawalMethods"] = request_json(client, "GET",
+                    f"{api}/withdrawal/methods/get/{token}")
+            except Exception:
+                results["withdrawalMethods"] = request_json(client, "POST",
+                    f"{api}/withdrawal/methods/get/", json_body={"token": token})
+
+            user_data = results.get("userData") or {}
             user = user_data.get("user", {}) if isinstance(user_data, dict) else {}
-            result = {"userData": user_data, "user": user}
-            result["userId"] = (str(user.get("userId")) if isinstance(user, dict)
-                                and user.get("userId") is not None else find_user_id(user_data))
-            result["updateData"] = api_request("POST", f"{api}/adcoin/updateData", token=token,
-                body={"token": token, "deviceId": self.session.get("device_id", ""),
-                      "advertisingId": self.session.get("advertising_id", ""), "messagingToken": None})
-            encoded_token = requests.utils.quote(token, safe="")
-            for key, url in (("fullStats", f"{api}/user/ownProfile/fullStats/get/{encoded_token}"),
-                             ("withdrawal", f"{api}/withdrawal/methods/get/{encoded_token}")):
-                try: result[key] = api_request("GET", url, token=token)
-                except requests.RequestException as exc: result[key] = {"error": str(exc)}
-            result["userId"] = result.get("userId") or find_user_id(result.get("fullStats")) or find_user_id(result.get("updateData")) or find_user_id(result.get("withdrawal"))
-            self.finished.emit(result)
-        except Exception as exc: self.failed.emit(str(exc))
+            results["user"] = user if isinstance(user, dict) else {}
+            results["userId"] = (str(results["user"]["userId"])
+                if results["user"].get("userId") is not None else None)
+            results["withdrawal"] = results.get("withdrawalMethods") or {}
+            self.finished.emit(results)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -209,7 +284,7 @@ class MainWindow(QMainWindow):
         layout.addStretch(); layout.addLayout(actions)
         root = QWidget(); root.setLayout(layout); self.setCentralWidget(root)
         self.apply_session()
-        if self.session.get("access_token"): self.refresh()
+        if self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken"): self.refresh()
 
 
     def add_video_files(self):
@@ -273,7 +348,8 @@ class MainWindow(QMainWindow):
             self.video_status.setText(f"Ошибка воспроизведения: {message}")
 
     def apply_session(self):
-        self.status.setText(f"Выполнен вход: {self.session.get('email', 'аккаунт')}" if self.session.get("access_token") else "Не выполнен вход")
+        token = self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken")
+        self.status.setText(f"Выполнен вход: {self.session.get('email', 'аккаунт')}" if token else "Не выполнен вход")
 
     def login(self):
         if LoginDialog(self).exec() == QDialog.DialogCode.Accepted:
@@ -287,7 +363,7 @@ class MainWindow(QMainWindow):
         self.balance.setText("Баланс: —"); self.earnings.setText("Заработано: —"); self.withdrawal.setText("Доступно к выводу: —")
 
     def refresh(self):
-        if not self.session.get("access_token"):
+        if not (self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken")):
             QMessageBox.information(self, "AdCoin", "Сначала войдите в аккаунт."); return
         self.refresh_button.setEnabled(False); self.status.setText("Загрузка данных…")
         self.thread = QThread(self); worker = BalanceWorker(self.session); worker.moveToThread(self.thread)
@@ -297,14 +373,12 @@ class MainWindow(QMainWindow):
         self.thread.finished.connect(lambda: self.refresh_button.setEnabled(True)); self.thread.start()
 
     def show_data(self, data):
-        update, stats, wd = data.get("updateData") or {}, data.get("fullStats") or {}, data.get("withdrawal") or {}
+        update = data.get("updateData") or {}
+        stats = data.get("fullStats") or {}
+        wd = data.get("withdrawalMethods") or {}
         user = data.get("user") or {}
-        user_id = data.get("userId") or "не найден"
-        self.user_id_label.setText(f"AdCoin userId: {user_id}")
-        cash = update.get("cash")
-        if cash is None:
-            cash = user.get("balance")
-        self.balance.setText(f"Баланс: {cash if cash is not None else '—'}")
+        self.user_id_label.setText(f"AdCoin userId: {data.get('userId') or 'не найден'}")
+        self.balance.setText(f"Баланс: {update.get('cash', user.get('balance', '—'))}")
         self.earnings.setText(f"Заработано: {stats.get('earnings', '—')}")
         self.withdrawal.setText(f"Доступно к выводу: {wd.get('balance', '—')}")
         self.status.setText(f"Аккаунт AdCoin подключён: {user.get('email') or self.session.get('email', '')}")
