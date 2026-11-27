@@ -27,11 +27,10 @@
             </intent-filter>
         </activity>
 
-        <!-- MAX fullscreen Activities: PiP разрешён именно для рекламного окна SDK. -->
+        <!-- MAX Activities remain resizable; windowing mode is controlled by Android. -->
         <activity
             android:name="com.applovin.adview.AppLovinFullscreenActivity"
-            android:resizeableActivity="true"
-            android:supportsPictureInPicture="true" />
+            android:resizeableActivity="true" />
         <activity
             android:name="com.applovin.adview.AppLovinFullscreenImmersiveActivity"
             android:resizeableActivity="true"
