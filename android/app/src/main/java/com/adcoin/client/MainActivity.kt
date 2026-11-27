@@ -5,7 +5,6 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.content.pm.PackageManager
 import android.util.Rational
 import android.util.Log
 import android.widget.Toast
@@ -73,16 +72,6 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-            Toast.makeText(
-                this,
-                "Android сообщает, что режим PiP не поддерживается или отключён на этом устройстве",
-                Toast.LENGTH_LONG
-            ).show()
-            Log.w("AdReverse.PiP", "Picture-in-picture is not supported by the device")
-            return
-        }
-
         try {
             val params = android.app.PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
@@ -92,7 +81,7 @@ class MainActivity : ComponentActivity() {
             if (!entered) {
                 Toast.makeText(
                     this,
-                    "Android не разрешил свернуть AdReverse в PiP. Проверьте разрешение «Картинка в картинке» для приложения.",
+                    "Android не включил PiP. Откройте настройки приложения и разрешите «Картинка в картинке».",
                     Toast.LENGTH_LONG
                 ).show()
             }
