@@ -29,15 +29,15 @@ class MainActivity : ComponentActivity() {
     private val isActivityResumed = mutableStateOf(false)
     private var onRewardCallback: (() -> Unit)? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 1. Минималистичная инициализация AppLovin SDK (ключ автоматически берется из AndroidManifest.xml)
-        AppLovinSdk.getInstance(this).initializeSdk()
+        // ✅ ПРАВИЛЬНАЯ инициализация AppLovin SDK (статический метод)
+        AppLovinSdk.initializeSdk(this)
 
         val closer = AdAutoCloser(application)
         
-        // 2. Получаем Ad Unit ID из BuildConfig (он автоматически подставляется из GitHub Secrets)
+        // Получаем Ad Unit ID из BuildConfig (он автоматически подставляется из GitHub Secrets)
         val adUnitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
         
         if (adUnitId.isBlank()) {
