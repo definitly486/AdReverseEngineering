@@ -5,13 +5,13 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
-import android.view.View
-import android.view.ViewGroup
 
 /**
- * Watches the ad from the moment it is displayed. It only clicks a control
- * that looks like a close button; it never sends BACK or finishes the ad Activity.
+ * Tracks the MAX ad Activity and exposes its package to the read-only
+ * AccessibilityService diagnostics. It intentionally never clicks Views,
+ * dispatches gestures, presses BACK, or closes the ad.
  */
 class AdAutoCloser(
     private val app: Application,
@@ -20,29 +20,27 @@ class AdAutoCloser(
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var adActivity: Activity? = null
     private var tick: Runnable? = null
-    private var lastViewClickAt = 0L
-    private var lastViewDumpAt = 0L
     @Volatile private var adPackageName: String? = null
 
     private val prefs get() = app.getSharedPreferences(PREFS, 0)
 
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(a: Activity) {
-            if (a !is MainActivity) {
+            if (a !is MainActivity && prefs.getBoolean(KEY_ACTIVE, false)) {
                 val expectedPackage = adPackageName
-                if (!prefs.getBoolean(KEY_ACTIVE, false) || expectedPackage == null ||
-                    a.packageName == expectedPackage) {
-                    if (prefs.getBoolean(KEY_ACTIVE, false) && adPackageName == null) {
+                if (expectedPackage == null || a.packageName == expectedPackage) {
+                    if (adPackageName == null) {
                         adPackageName = a.packageName
                         prefs.edit().putString(KEY_AD_PACKAGE, adPackageName).apply()
                     }
                     adActivity = a
-                    Log.i(TAG, "resumed ad candidate: ${a.javaClass.name} package=${a.packageName}")
+                    Log.i(TAG, "ad Activity observed: ${a.javaClass.name} package=${a.packageName}")
                 } else {
-                    Log.i(TAG, "ignored non-ad activity package=${a.packageName}; expected=$expectedPackage")
+                    Log.i(TAG, "ignored Activity package=${a.packageName}; expected=$expectedPackage")
                 }
             }
         }
+
         override fun onActivityPaused(a: Activity) { if (a === adActivity) adActivity = null }
         override fun onActivityDestroyed(a: Activity) { if (a === adActivity) adActivity = null }
         override fun onActivityCreated(a: Activity, b: Bundle?) {}
@@ -53,44 +51,34 @@ class AdAutoCloser(
 
     init { app.registerActivityLifecycleCallbacks(lifecycle) }
 
-    /** Call from MAX onAdDisplayed; wait until the close control actually appears. */
+    /** Start read-only observation after MAX reports that the ad is displayed. */
     fun startWatchingForClose(timeoutMs: Long = 180_000) {
         stop()
-        lastViewClickAt = 0L
         adPackageName = adActivity?.packageName
-       prefs.edit()
-    .putBoolean(KEY_ACTIVE, true)
-    .putLong("armed_at", android.os.SystemClock.elapsedRealtime())  // ← добавить эту строку
-    .putLong(KEY_LAST_CLICK, 0L)
-    .putString(KEY_AD_PACKAGE, adPackageName)
-    .putString(KEY_LAST_RESULT, "watching")
-    .apply()
-        val startedAt = System.currentTimeMillis()
-        onLog("реклама открыта; жду появления X.")
-        Log.i(TAG, "watching for close control")
-        val r = object : Runnable {
+        prefs.edit()
+            .putBoolean(KEY_ACTIVE, true)
+            .putLong("armed_at", SystemClock.elapsedRealtime())
+            .putLong(KEY_LAST_CLICK, 0L)
+            .putString(KEY_AD_PACKAGE, adPackageName)
+            .putString(KEY_LAST_RESULT, "read-only diagnostics active; no taps")
+            .apply()
+
+        val startedAt = SystemClock.elapsedRealtime()
+        onLog("реклама открыта; включена только диагностика, нажатия отключены.")
+        Log.i(TAG, "read-only ad diagnostics started; no View clicks or gestures")
+        val watcher = object : Runnable {
             override fun run() {
                 if (!prefs.getBoolean(KEY_ACTIVE, false)) return
-                if (System.currentTimeMillis() - startedAt >= timeoutMs) {
-                    onLog("таймаут ожидания X; рекламное окно оставлено открытым.")
+                if (SystemClock.elapsedRealtime() - startedAt >= timeoutMs) {
+                    onLog("таймаут диагностики; рекламное окно оставлено открытым.")
                     stop()
                     return
                 }
-                val a = adActivity
-                if (a != null && !a.isFinishing && System.currentTimeMillis() - lastViewClickAt > 1_500) {
-                    val candidate = a.window?.decorView?.let(::findCloseView)
-                    if (candidate != null && candidate.isEnabled) {
-                        val clicked = runCatching { candidate.performClick() }.getOrDefault(false)
-                        lastViewClickAt = System.currentTimeMillis()
-                        Log.i(TAG, "View close candidate clicked=$clicked class=${candidate.javaClass.name}")
-                        onLog(if (clicked) "нажата кнопка закрытия; ожидаю закрытие окна." else "найдена X, но Android View не принял нажатие.")
-                    }
-                }
-                main.postDelayed(this, 350)
+                main.postDelayed(this, WATCH_INTERVAL_MS)
             }
         }
-        tick = r
-        main.post(r)
+        tick = watcher
+        main.postDelayed(watcher, WATCH_INTERVAL_MS)
     }
 
     /** Backward-compatible entry point for older call sites. */
@@ -101,56 +89,18 @@ class AdAutoCloser(
     fun stop() {
         tick?.let(main::removeCallbacks)
         tick = null
-        prefs.edit().putBoolean(KEY_ACTIVE, false).remove(KEY_AD_PACKAGE).apply()
+        prefs.edit()
+            .putBoolean(KEY_ACTIVE, false)
+            .remove(KEY_AD_PACKAGE)
+            .putString(KEY_LAST_RESULT, "diagnostics stopped; no input was sent")
+            .apply()
         adPackageName = null
+        adActivity = null
     }
 
     fun dispose() {
         stop()
         app.unregisterActivityLifecycleCallbacks(lifecycle)
-    }
-
-    private fun findCloseView(root: View): View? {
-        val queue = ArrayDeque<View>()
-        queue.add(root)
-        val rootWidth = root.width.toFloat()
-        val rootHeight = root.height.toFloat()
-        while (queue.isNotEmpty()) {
-            val view = queue.removeFirst()
-            if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
-                System.currentTimeMillis() - lastViewDumpAt >= 2_000L) {
-                val location = IntArray(2)
-                view.getLocationOnScreen(location)
-                val id = runCatching { view.resources.getResourceEntryName(view.id) }.getOrNull().orEmpty()
-                Log.i(TAG, "VIEW_DIAG class=${view.javaClass.name} id=$id desc=${view.contentDescription} text=${(view as? android.widget.TextView)?.text} size=${view.width}x${view.height} at=${location[0]},${location[1]}")
-                lastViewDumpAt = System.currentTimeMillis()
-            }
-            if (view !== root && view.visibility == View.VISIBLE && view.isClickable &&
-                view.isEnabled && view.width in 1..180 && view.height in 1..180) {
-                val location = IntArray(2)
-                view.getLocationOnScreen(location)
-                val id = runCatching { view.resources.getResourceEntryName(view.id) }
-                    .getOrNull()?.lowercase().orEmpty()
-                val description = view.contentDescription?.toString()?.lowercase().orEmpty()
-                val label = (id + " " + description).replace('_', ' ')
-                // A store/install CTA must never be clicked by the ad auto-closer.
-                if (AD_CTA_WORDS.any(label::contains)) {
-                    if (view is ViewGroup) {
-                        for (i in 0 until view.childCount) queue.add(view.getChildAt(i))
-                    }
-                    continue
-                }
-                // Only click a semantically identified close control. Position/size alone
-                // previously matched unrelated ad controls such as "другие параметры".
-                val explicitClose = listOf("close", "dismiss", "закрыть", "×", "✕", "✖")
-                    .any(label::contains)
-                if (explicitClose) return view
-            }
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) queue.add(view.getChildAt(i))
-            }
-        }
-        return null
     }
 
     companion object {
@@ -159,11 +109,7 @@ class AdAutoCloser(
         const val KEY_LAST_CLICK = "last_accessibility_click"
         const val KEY_LAST_RESULT = "last_result"
         const val KEY_AD_PACKAGE = "ad_package"
-        private val AD_CTA_WORDS = listOf(
-            "google play", "play store", "install", "open", "download",
-            "get the app", "get app", "learn more", "shop now",
-            "установить", "скачать", "открыть", "перейти", "подробнее"
-        )
+        private const val WATCH_INTERVAL_MS = 1_000L
         private const val TAG = "AdCoin.AutoClose"
     }
 }
