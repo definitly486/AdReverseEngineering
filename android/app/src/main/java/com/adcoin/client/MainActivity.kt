@@ -262,9 +262,8 @@ private fun AdCoinApp(
 
             vm.consumeAutoShowRequest()
 
-            val file = activeController.getLatestVideoFile()
-            onEnterPip(file)
-
+            // Не переводим MainActivity в PiP перед показом рекламы:
+            // PiP перекрывает рекламное Activity и перехватывает нажатия.
             val shown = activeController.show()
 
             if (!shown) {
@@ -328,9 +327,8 @@ private fun DashboardScreen(
             onClick = {
                 val activeController = controller ?: return@Button
 
-                val file = activeController.getLatestVideoFile()
-                onEnterPip(file)
-
+                // Не открываем PiP поверх рекламного Activity MAX:
+                // иначе касания по перекрытой области не попадут в рекламу.
                 val shown = activeController.show()
 
                 if (!shown) {
