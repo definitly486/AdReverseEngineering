@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.content.pm.PackageManager
+import android.widget.Toast
 import android.util.Log
 import android.util.Rational
 import androidx.activity.ComponentActivity
@@ -22,9 +24,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.applovin.sdk.AppLovinSdk
 import com.applovin.sdk.AppLovinSdkInitializationConfiguration
+import rikka.shizuku.Shizuku
 import java.io.File
 
 private const val TAG = "AdCoin"
+private const val SHIZUKU_REQUEST_CODE = 4107
 
 class MainActivity : ComponentActivity() {
 
@@ -37,8 +41,20 @@ class MainActivity : ComponentActivity() {
 
     private var adCoinViewModel: AdCoinViewModel? = null
 
+    private val shizukuPermissionListener =
+        Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+            if (requestCode == SHIZUKU_REQUEST_CODE) {
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    launchInFreeform()
+                } else {
+                    showToast("Разрешение Shizuku не предоставлено")
+                }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
 
         // Resolve the Activity-scoped ViewModel before MAX initialization so
         // SDK callbacks cannot race a Compose LaunchedEffect assignment.
@@ -54,6 +70,7 @@ class MainActivity : ComponentActivity() {
                 onExitPip = ::exitAppPictureInPicture,
                 controller = controllerState.value,
                 isActivityResumed = isActivityResumed.value,
+                onLaunchFreeform = ::requestFreeformLaunch,
                 vm = vm
             )
         }
@@ -155,6 +172,76 @@ class MainActivity : ComponentActivity() {
         isActivityResumed.value = true
     }
 
+    private fun requestFreeformLaunch() {
+        if (!Shizuku.pingBinder()) {
+            showToast("Shizuku не запущен. Запустите сервер Shizuku и повторите попытку.")
+            return
+        }
+
+        try {
+            when (Shizuku.checkSelfPermission()) {
+                PackageManager.PERMISSION_GRANTED -> launchInFreeform()
+                else -> Shizuku.requestPermission(SHIZUKU_REQUEST_CODE)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось запросить разрешение Shizuku", e)
+            showToast("Ошибка доступа Shizuku: ${e.message ?: "неизвестная ошибка"}")
+        }
+    }
+
+    private fun launchInFreeform() {
+        Thread {
+            try {
+                if (!Shizuku.pingBinder() ||
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
+                ) {
+                    runOnUiThread { showToast("Shizuku отключён или разрешение отозвано") }
+                    return@Thread
+                }
+
+                val command = """
+                    settings put global enable_freeform_support 1
+                    settings put global force_resizable_activities 1
+                    am start --windowingMode 5 --activity-reorder-to-front -n com.pavloffmedev.dcn/com.adcoin.client.MainActivity
+                """.trimIndent()
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val exitCode = process.waitFor()
+
+                Log.i(TAG, "Shizuku Freeform command exit=$exitCode output=$output")
+                runOnUiThread {
+                    if (exitCode == 0) {
+                        showToast("Запуск AdReverse в Freeform выполнен")
+                    } else {
+                        showToast("Не удалось запустить Freeform: $output")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Ошибка запуска Freeform через Shizuku", e)
+                runOnUiThread {
+                    showToast("Ошибка Shizuku: ${e.message ?: "неизвестная ошибка"}")
+                }
+            }
+        }.start()
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == SHIZUKU_REQUEST_CODE &&
+            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        ) {
+            launchInFreeform()
+        }
+    }
+
     override fun onPause() {
         isActivityResumed.value = false
         super.onPause()
@@ -197,6 +284,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
         controllerState.value = null
         adCoinViewModel = null
         super.onDestroy()
@@ -211,6 +299,7 @@ private fun AdCoinApp(
     onExitPip: () -> Unit,
     controller: MaxRewardedController?,
     isActivityResumed: Boolean,
+    onLaunchFreeform: () -> Unit,
     vm: AdCoinViewModel
 ) {
     val state by vm.state.collectAsState()
@@ -230,7 +319,8 @@ private fun AdCoinApp(
                 controller = controller,
                 onEnterPip = onEnterPip,
                 onExitPip = onExitPip,
-                isActivityResumed = isActivityResumed
+                isActivityResumed = isActivityResumed,
+                onLaunchFreeform = onLaunchFreeform
             )
         } else {
             LoginScreen(vm = vm)
@@ -282,7 +372,8 @@ private fun DashboardScreen(
     controller: MaxRewardedController?,
     onEnterPip: (File?) -> Unit,
     onExitPip: () -> Unit,
-    isActivityResumed: Boolean
+    isActivityResumed: Boolean,
+    onLaunchFreeform: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -347,6 +438,15 @@ private fun DashboardScreen(
                     "Смотреть рекламу"
                 }
             )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onLaunchFreeform,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Запустить в Freeform")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
