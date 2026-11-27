@@ -106,15 +106,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         for (root in roots) {
             // Слепые координатные тапы: не ищем текст, viewId или clickable-узлы.
-            // Обе точки рассчитываются от bounds маленького рекламного окна,
-            // поэтому жесты попадают внутрь окна, а не в элементы рабочего стола.
-            // Правая точка отнесена от правого края, где находится X.
+            // Не нажимаем в верхней полосе окна, где находятся его управляющие
+            // элементы (например, Google Play/gear и X). Точки размещаем ниже,
+            // внутри содержимого рекламного окна, слева и справа.
             val windowBounds = Rect().also(root::getBoundsInScreen)
             if (windowBounds.isEmpty || windowBounds.width() < 4 || windowBounds.height() < 4) {
                 Log.w(TAG, "skip invalid ad window bounds=$windowBounds")
                 continue
             }
-            val tapY = (windowBounds.top + windowBounds.height() * 0.125f).toInt()
+            val tapY = (windowBounds.top + windowBounds.height() * 0.50f).toInt()
             val leftX = (windowBounds.left + windowBounds.width() * 0.20f).toInt()
             val rightX = (windowBounds.left + windowBounds.width() * 0.80f).toInt()
             val y = tapY.coerceIn(windowBounds.top + 1, windowBounds.bottom - 2)
@@ -124,7 +124,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 Rect(leftPoint, y, leftPoint + 1, y + 1),
                 Rect(rightPoint, y, rightPoint + 1, y + 1)
             )
-            Log.i(TAG, "blind inside-window taps left=($leftPoint,$y) right=($rightPoint,$y) window=$windowBounds")
+            Log.i(TAG, "blind content taps (window controls excluded) left=($leftPoint,$y) right=($rightPoint,$y) window=$windowBounds")
 
             dispatchTapSequence(uniqueTargets, 0)
             prefs.edit()
