@@ -147,16 +147,19 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val id = System.identityHashCode(node)
         if (!seen.add(id)) return
 
-        val pkg = node.packageName?.toString() ?: "null"
+        val pkg = node.packageName?.toString() ?: return
         val bounds = Rect().also { node.getBoundsInScreen(it) }
+
+        // Игнорируем только systemui и совсем пустые окна
+        if (pkg == "com.android.systemui") {
+            Log.v(TAG, "ROOT[$source] skipped systemui bounds=$bounds")
+            return
+        }
 
         Log.i(TAG, "ROOT[$source] pkg=$pkg bounds=$bounds " +
                 "childCount=${node.childCount} visible=${node.isVisibleToUser}")
 
-        // Берём почти всё, кроме собственного приложения и systemui
-        if (pkg != packageName && pkg != "com.android.systemui") {
-            roots.add(node)
-        }
+        roots.add(node)
     }
 
     // 1. Активное окно
@@ -165,9 +168,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
     // 2. Все окна
     try {
         windows?.forEachIndexed { index, window ->
-            val type = window.type
-            val layer = window.layer
-            Log.i(TAG, "WINDOW[$index] type=$type layer=$layer title=${window.title}")
+            Log.i(TAG, "WINDOW[$index] type=${window.type} layer=${window.layer} title=${window.title}")
             addRoot(window.root, "Win$index")
         }
     } catch (e: Exception) {
@@ -179,10 +180,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
         try {
             val all = windowsOnAllDisplays
             for (i in 0 until all.size()) {
-                val displayId = all.keyAt(i)
                 val list = all.valueAt(i)
                 list?.forEachIndexed { j, window ->
-                    addRoot(window.root, "Display$displayId-Win$j")
+                    addRoot(window.root, "Display${all.keyAt(i)}-Win$j")
                 }
             }
         } catch (e: Exception) {
