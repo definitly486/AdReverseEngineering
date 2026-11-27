@@ -38,7 +38,6 @@ android {
         buildConfigField("String", "APPLOVIN_REWARDED_AD_UNIT_ID", "\"$rewardedAdUnitId\"")
         buildConfigField("String", "BUILD_BRANCH", "\"$buildBranch\"")
         buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
-        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }
 
     signingConfigs {
@@ -85,7 +84,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.applovin:applovin-sdk:13.7.0")
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
+    // Shizuku 13.1.x makes Shizuku.newProcess() private; 12.2.0 retains
+    // the public API used by MainActivity. Keep API and provider in sync.
+    implementation("dev.rikka.shizuku:api:12.2.0")
+    implementation("dev.rikka.shizuku:provider:12.2.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
