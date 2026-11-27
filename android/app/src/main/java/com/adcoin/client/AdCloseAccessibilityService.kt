@@ -114,16 +114,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 )
                 .apply()
 
-            if (clicked) {
-                if (isGooglePlay) {
-                    // Не даём уйти в магазин
-                    mainHandler.postDelayed({
-                        performGlobalAction(GLOBAL_ACTION_BACK)
-                        Log.i(TAG, "pressed BACK after Google Play click")
-                    }, 350)
-                }
-                return
-            }
+            if (clicked) return
         }
 
         Log.v(TAG, "armed; nothing clickable yet")
@@ -169,9 +160,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 val clickable = node.isClickable || hasClickableParent(node)
 
                 if (clickable) {
-                    // Google Play / Install
+                    // Google Play / Install — это рекламная CTA, а не кнопка закрытия.
+                    // Фиксируем её, но никогда не нажимаем: ищем X / Close на этом экране.
                     if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
-                        return node to true
+                        Log.i(TAG, "detected Google Play/install CTA; searching for close control: $label")
+                        if (node is android.view.accessibility.AccessibilityNodeInfo) {
+                            // Не выбираем саму CTA и не поднимаемся к её кликабельному родителю.
+                            // Дочерние узлы оставляем для обхода ниже.
+                        }
+                        continue
                     }
 
                     // Явный крестик по тексту / символу
@@ -189,7 +186,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     }
 
                     // Агрессивный запасной вариант
-                    if (aggressive && node.isClickable && isSmallTopRight(node, root)) {
+                    if (aggressive && node.isClickable &&
+                        !GOOGLE_PLAY_WORDS.any { label.contains(it) } &&
+                        isSmallTopRight(node, root)) {
                         if (fallbackTopRight == null) {
                             fallbackTopRight = node
                         }
