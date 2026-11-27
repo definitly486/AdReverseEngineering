@@ -383,6 +383,22 @@ private fun PipStatus(
             style = MaterialTheme.typography.titleSmall
         )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Баланс: $balance",
+                color = Color.LightGray,
+                style = MaterialTheme.typography.labelSmall
+            )
+            Text(
+                "Роликов: $videosCompleted",
+                color = Color.LightGray,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+
         if (videoFile != null && videoFile.exists() && videoFile.length() > 0L) {
             AndroidView(
                 factory = { ctx ->
@@ -416,12 +432,7 @@ private fun PipStatus(
                     color = Color.White
                 )
                 Text(
-                    "Баланс: $balance",
-                    color = Color.LightGray,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    "Роликов: $videosCompleted",
+                    "Ожидание рекламного видео",
                     color = Color.LightGray,
                     style = MaterialTheme.typography.bodySmall
                 )
