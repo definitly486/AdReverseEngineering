@@ -2,24 +2,16 @@ package com.adcoin.client
 
 import android.app.Activity
 import android.app.Application
-import android.app.PictureInPictureParams
-import android.os.Build
 import android.util.Log
-import android.util.Rational
-import java.util.Collections
-import java.util.WeakHashMap
 
 /**
- * Переводит Activity полноэкранной рекламы AppLovin MAX в PiP не более
- * одного раза за время жизни экземпляра Activity.
+ * Не переводит рекламные Activity AppLovin MAX в PiP.
  *
- * Повторный вызов enterPictureInPictureMode() при каждом onActivityResumed()
- * вызывал цикл: MAX разворачивался, снова получал onResume и опять сворачивался.
+ * Реклама должна наследовать оконный режим Android (в том числе freeform,
+ * если его поддерживает прошивка и пользователь открыл AdReverse в свободном
+ * окне). Здесь только фиксируем фактический режим для диагностики.
  */
 class AdCoinApplication : Application(), Application.ActivityLifecycleCallbacks {
-
-    private val pipRequestedActivities: MutableSet<Activity> =
-        Collections.newSetFromMap(WeakHashMap<Activity, Boolean>())
 
     override fun onCreate() {
         super.onCreate()
@@ -27,41 +19,18 @@ class AdCoinApplication : Application(), Application.ActivityLifecycleCallbacks 
     }
 
     override fun onActivityResumed(activity: Activity) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-
-        val activityName = activity.javaClass.name
-        if (activityName !in MAX_FULLSCREEN_ACTIVITIES) return
-
-        // Защита от повторного входа в PiP после каждого onResume.
-        synchronized(pipRequestedActivities) {
-            if (!pipRequestedActivities.add(activity)) {
-                Log.d(TAG, "PiP already requested for this Activity instance: $activityName")
-                return
-            }
-        }
+        if (activity.javaClass.name !in MAX_FULLSCREEN_ACTIVITIES) return
 
         activity.window.decorView.post {
-            if (activity.isFinishing || activity.isDestroyed || activity.isInPictureInPictureMode) {
-                Log.d(TAG, "Skip PiP request; Activity is no longer eligible: $activityName")
-                return@post
-            }
+            if (activity.isFinishing || activity.isDestroyed) return@post
 
-            try {
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(9, 16))
-                    .build()
-
-                val entered = activity.enterPictureInPictureMode(params)
-                Log.i(TAG, "One-shot PiP request for $activityName: entered=$entered")
-            } catch (error: Exception) {
-                Log.e(TAG, "Cannot enter PiP for $activityName", error)
-            }
-        }
-    }
-
-    override fun onActivityDestroyed(activity: Activity) {
-        synchronized(pipRequestedActivities) {
-            pipRequestedActivities.remove(activity)
+            Log.i(
+                TAG,
+                "MAX Activity resumed: ${activity.javaClass.name}, " +
+                    "multiWindow=${activity.isInMultiWindowMode}, " +
+                    "pip=${activity.isInPictureInPictureMode}, " +
+                    "viewSize=${activity.window.decorView.width}x${activity.window.decorView.height}"
+            )
         }
     }
 
@@ -70,9 +39,10 @@ class AdCoinApplication : Application(), Application.ActivityLifecycleCallbacks 
     override fun onActivityPaused(activity: Activity) = Unit
     override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
+    override fun onActivityDestroyed(activity: Activity) = Unit
 
     private companion object {
-        const val TAG = "AdCoin.MAX.PiP"
+        const val TAG = "AdCoin.MAX.Window"
 
         val MAX_FULLSCREEN_ACTIVITIES = setOf(
             "com.applovin.adview.AppLovinFullscreenActivity",
