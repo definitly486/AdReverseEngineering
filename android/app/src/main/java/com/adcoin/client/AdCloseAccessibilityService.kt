@@ -12,18 +12,16 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.view.accessibility.AccessibilityWindowInfo
 import java.util.ArrayDeque
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
  *
- * Behaviour:
- * - Clicks whichever appears first: Google Play / Install or Close (X)
- * - After clicking Google Play immediately presses BACK
- * - After ~8 seconds switches to aggressive mode (best top-right candidate)
+ * - Clicks Google Play / Install or Close (X)
+ * - After Google Play → presses BACK
+ * - After ~7 seconds → aggressive mode (even non-clickable top-right nodes)
  * - Supports multi-window / freeform / PiP
- * - Uses gesture click as fallback when ACTION_CLICK doesn't work
+ * - Uses gesture click as the main reliable method
  */
 class AdCloseAccessibilityService : AccessibilityService() {
 
@@ -63,7 +61,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
-        // Безопасное определение пакета рекламы
+        // Безопасное определение пакета
         var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
         if (expectedPackage.isNullOrBlank() ||
             expectedPackage == "com.blackview.launcher" ||
@@ -88,7 +86,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Предпочитаем окна нашего приложения, особенно маленькие
+        // Предпочитаем окна нашего приложения (особенно маленькие)
         val ourPackage = packageName
         val preferredRoots = allRoots
             .filter { root ->
@@ -97,7 +95,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
             }
             .sortedBy { root ->
                 val r = Rect().also { root.getBoundsInScreen(it) }
-                // Чем меньше площадь — тем выше приоритет
                 r.width().toLong() * r.height()
             }
             .ifEmpty { allRoots }
@@ -106,7 +103,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             lastTreeDumpAt = now
             Log.i(TAG, "TREE_DIAG expected=$expectedPackage roots=${preferredRoots.size} " +
                     "aggressive=${now - armedAt > AGGRESSIVE_AFTER_MS}")
-            preferredRoots.take(3).forEach { dumpTree(it) }
+            preferredRoots.take(2).forEach { dumpTree(it) }
         }
 
         for (root in preferredRoots) {
@@ -216,7 +213,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
 
-            // Убрали isVisibleToUser — в multi-window он часто врёт
             if (node.isEnabled) {
                 val label = describe(node)
                 val clickable = node.isClickable || hasClickableParent(node)
@@ -239,15 +235,24 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     ) {
                         return node to false
                     }
+                }
 
-                    // 4. Агрессивный режим
-                    if (aggressive && node.isClickable &&
-                        isInTopRightCorner(node, root, rightPercent = 0.42f, topPercent = 0.38f)
-                    ) {
-                        val score = scoreCloseCandidate(node, root)
-                        if (score > bestCloseScore) {
-                            bestCloseScore = score
-                            bestCloseCandidate = node
+                // 4. Агрессивный режим — берём ДАЖЕ некликабельные маленькие ноды
+                if (aggressive) {
+                    val nodeRect = Rect().also { node.getBoundsInScreen(it) }
+                    val rootRect = Rect().also { root.getBoundsInScreen(it) }
+
+                    if (!rootRect.isEmpty && !nodeRect.isEmpty) {
+                        val nearRight = nodeRect.right >= rootRect.right - (rootRect.width() * 0.45f)
+                        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * 0.40f)
+                        val sizeOk = nodeRect.width() in 10..100 && nodeRect.height() in 10..100
+
+                        if (nearRight && nearTop && sizeOk) {
+                            val score = scoreCloseCandidate(node, root)
+                            if (score > bestCloseScore) {
+                                bestCloseScore = score
+                                bestCloseCandidate = node
+                            }
                         }
                     }
                 }
@@ -259,7 +264,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }
 
         if (aggressive && bestCloseCandidate != null) {
-            Log.w(TAG, "aggressive mode: clicking best top-right candidate (score=$bestCloseScore)")
+            Log.w(TAG, "aggressive mode: clicking best top-right candidate " +
+                    "(score=$bestCloseScore, clickable=${bestCloseCandidate.isClickable})")
             return bestCloseCandidate to false
         }
 
@@ -359,12 +365,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
     }
 
     private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
-        // 1. Обычный ACTION_CLICK
-        if (node.isClickable && node.isEnabled &&
+        // Пробуем обычный клик (на всякий случай)
+        if (node.isClickable && node.isEnabled) {
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        ) {
-            Log.i(TAG, "ACTION_CLICK succeeded")
-            // Даём небольшую паузу и всё равно делаем жест — надёжнее
         }
 
         var parent = node.parent
@@ -376,7 +379,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             parent = parent.parent
         }
 
-        // 2. Жест (самый надёжный способ)
+        // Главный способ — жест
         val rect = Rect()
         node.getBoundsInScreen(rect)
         if (rect.isEmpty) return false
@@ -387,19 +390,18 @@ class AdCloseAccessibilityService : AccessibilityService() {
         Log.i(TAG, "gesture click at $x,$y bounds=$rect")
 
         val path = Path().apply { moveTo(x, y) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 60)
+        val stroke = GestureDescription.StrokeDescription(path, 0, 70)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
 
-        val sent = dispatchGesture(gesture, object : GestureResultCallback() {
+        return dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 Log.i(TAG, "gesture completed")
             }
+
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 Log.w(TAG, "gesture cancelled")
             }
         }, null)
-
-        return sent
     }
 
     override fun onInterrupt() = Unit
@@ -408,8 +410,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val TAG = "AdCoin.AccessClose"
         private const val CLICK_COOLDOWN_MS = 900L
         private const val TREE_DUMP_INTERVAL_MS = 2500L
-        private const val MAX_DIAGNOSTIC_NODES = 60
-        private const val AGGRESSIVE_AFTER_MS = 7_000L
+        private const val MAX_DIAGNOSTIC_NODES = 50
+        private const val AGGRESSIVE_AFTER_MS = 6_500L
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
