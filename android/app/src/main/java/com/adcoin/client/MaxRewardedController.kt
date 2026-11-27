@@ -15,6 +15,7 @@ class MaxRewardedController(
     private val activity: Activity,
     private val adUnitId: String,
     private val onRewardGranted: () -> Unit,
+    private val onAdLoaded: () -> Unit,
     private val onAdHidden: () -> Unit,
     private val onAdDisplayed: () -> Unit,
     private val autoCloser: AdAutoCloser? = null
@@ -174,6 +175,7 @@ class MaxRewardedController(
 
     override fun onAdLoaded(ad: MaxAd) {
         Log.i("AdCoin.MaxRewarded", "Ad loaded")
+        onAdLoaded()
     }
 
     override fun onAdLoadFailed(adUnitId: String, error: MaxError) {
