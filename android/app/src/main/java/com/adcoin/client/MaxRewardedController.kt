@@ -28,7 +28,7 @@ class MaxRewardedController(
 
     private fun logEvent(event: String, ad: MaxAd? = null, details: String = "") {
         val metadata = ad?.let {
-            " network=${it.networkName}, adUnit=${it.adUnitId}, placement=${it.placement}"
+            " network=${it.networkName}, creativeId=${it.creativeId}, adUnit=${it.adUnitId}, placement=${it.placement}, format=${it.format}, revenue=${it.revenue}"
         }.orEmpty()
         Log.i(logTag, "$event$metadata $details")
     }
