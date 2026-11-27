@@ -371,7 +371,20 @@ private fun DashboardScreen(
                 }
             )
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        BuildInfo()
     }
+}
+
+@Composable
+private fun BuildInfo() {
+    val shortCommit = BuildConfig.BUILD_COMMIT.take(7)
+    Text(
+        text = "Сборка: ${BuildConfig.BUILD_TIME} · Ветка: ${BuildConfig.BUILD_BRANCH} · Коммит: $shortCommit",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
 }
 
 @Composable
