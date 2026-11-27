@@ -85,5 +85,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.applovin:applovin-sdk:13.7.0")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
