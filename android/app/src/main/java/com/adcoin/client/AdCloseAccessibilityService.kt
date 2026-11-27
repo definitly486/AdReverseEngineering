@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.ArrayDeque
@@ -180,8 +181,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     val bounds = Rect().also(node::getBoundsInScreen)
                     if (!bounds.isEmpty) {
                         GP = Rect(bounds)
-                        Log.i(
-                            TAG,
+                        val message = "Google Play найдена\\n" +
+                                "X: ${bounds.left}–${bounds.right}  Y: ${bounds.top}–${bounds.bottom}\\n" +
+                                "Центр: ${bounds.centerX()}, ${bounds.centerY()}"
+                        reportGpStatus(
+                            message,
                             "GP FOUND: label=$label bounds=$GP " +
                                     "left=${bounds.left} top=${bounds.top} " +
                                     "right=${bounds.right} bottom=${bounds.bottom} " +
@@ -220,15 +224,22 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }
 
         if (GP == null) {
-            val now = SystemClock.elapsedRealtime()
-            if (now - lastGpStatusAt >= GP_STATUS_LOG_INTERVAL_MS) {
-                Log.i(TAG, "GP NOT FOUND: Google Play / Install button not detected in scanned window")
-                lastGpStatusAt = now
-            }
+            reportGpStatus(
+                "Кнопка Google Play / Install не найдена",
+                "GP NOT FOUND: Google Play / Install button not detected in scanned window"
+            )
         }
 
         if (closeTarget != null) return closeTarget to false
         return if (aggressive && best != null) best to false else null
+    }
+
+    private fun reportGpStatus(message: String, logMessage: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastGpStatusAt < GP_STATUS_LOG_INTERVAL_MS) return
+        lastGpStatusAt = now
+        Log.i(TAG, logMessage)
+        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
     private fun dumpWindowTree(root: AccessibilityNodeInfo) {
