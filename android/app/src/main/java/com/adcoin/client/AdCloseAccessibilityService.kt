@@ -12,7 +12,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import java.util.ArrayDeque
-import kotlin.math.minOf
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
