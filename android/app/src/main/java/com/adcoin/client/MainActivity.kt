@@ -1,3 +1,4 @@
+
 package com.adcoin.client
 
 import android.app.PictureInPictureParams
@@ -18,60 +19,143 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.applovin.mediation.AppLovinMediationProvider
 import com.applovin.sdk.AppLovinSdk
+import com.applovin.sdk.AppLovinSdkInitializationConfiguration
 import java.io.File
+
+private const val TAG = "AdCoin"
 
 class MainActivity : ComponentActivity() {
 
-    private var controller: MaxRewardedController? = null
+    private val controllerState =
+        mutableStateOf<MaxRewardedController?>(null)
+
     private val pipVideoFile = mutableStateOf<File?>(null)
     private val pipMode = mutableStateOf(false)
     private val isActivityResumed = mutableStateOf(false)
+
     private var onRewardCallback: (() -> Unit)? = null
 
-     override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // ✅ ПРАВИЛЬНАЯ инициализация AppLovin SDK (статический метод)
-        AppLovinSdk.initializeSdk(this)
 
-        val closer = AdAutoCloser(application)
-        
-        // Получаем Ad Unit ID из BuildConfig (он автоматически подставляется из GitHub Secrets)
-        val adUnitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
-        
-        if (adUnitId.isBlank()) {
-            Log.e("AdCoin", "⚠️ APPLOVIN_REWARDED_AD_UNIT_ID не задан! Проверьте GitHub Secrets.")
-        }
-
-        controller = MaxRewardedController(
-            activity = this,
-            adUnitId = adUnitId,
-            onRewardGranted = { 
-                Log.i("AdCoin", "Callback: награда получена")
-                onRewardCallback?.invoke() 
-            },
-            onAdHidden = { Log.i("AdCoin", "Callback: реклама скрыта") },
-            onAdDisplayed = { Log.i("AdCoin", "Callback: реклама показана") },
-            autoCloser = closer
-        )
-
+        // Сначала создаём интерфейс.
         setContent {
             val vm: AdCoinViewModel = viewModel()
-            
+
             LaunchedEffect(Unit) {
-                onRewardCallback = { vm.onRewarded() }
+                onRewardCallback = {
+                    vm.onRewarded()
+                }
             }
 
             AdCoinApp(
                 isInPip = pipMode.value,
                 pipVideoFile = pipVideoFile.value,
-                onEnterPip = { file -> enterAppPictureInPicture(file) },
+                onEnterPip = { file ->
+                    enterAppPictureInPicture(file)
+                },
                 onExitPip = ::exitAppPictureInPicture,
-                controller = controller,
+                controller = controllerState.value,
                 isActivityResumed = isActivityResumed.value,
                 vm = vm
             )
+        }
+
+        initializeAppLovin()
+    }
+
+    /**
+     * Инициализация AppLovin MAX SDK.
+     */
+    private fun initializeAppLovin() {
+        try {
+            // ВАЖНО:
+            // Здесь должен быть SDK KEY из AppLovin Dashboard.
+            // Это НЕ Rewarded Ad Unit ID.
+            val sdkKey = BuildConfig.APPLOVIN_SDK_KEY
+
+            if (sdkKey.isBlank()) {
+                Log.e(TAG, "AppLovin SDK Key не задан")
+                return
+            }
+
+            val initializationConfig =
+                AppLovinSdkInitializationConfiguration
+                    .builder(sdkKey)
+                    .setMediationProvider(
+                        AppLovinMediationProvider.MAX
+                    )
+                    .build()
+
+            Log.i(TAG, "Начинаем инициализацию AppLovin SDK")
+
+            AppLovinSdk.getInstance(this)
+                .initialize(initializationConfig) {
+
+                    Log.i(TAG, "AppLovin SDK успешно инициализирован")
+
+                    runOnUiThread {
+                        createRewardedController()
+                    }
+                }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка инициализации AppLovin", e)
+        }
+    }
+
+    /**
+     * Создание контроллера только после готовности SDK.
+     */
+    private fun createRewardedController() {
+        if (isFinishing || isDestroyed) {
+            Log.w(TAG, "Activity уже закрывается, контроллер не создан")
+            return
+        }
+
+        if (controllerState.value != null) {
+            Log.d(TAG, "Контроллер уже создан")
+            return
+        }
+
+        val adUnitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
+
+        if (adUnitId.isBlank()) {
+            Log.e(TAG, "APPLOVIN_REWARDED_AD_UNIT_ID не задан")
+            return
+        }
+
+        try {
+            val closer = AdAutoCloser(application)
+
+            controllerState.value = MaxRewardedController(
+                activity = this,
+                adUnitId = adUnitId,
+
+                onRewardGranted = {
+                    Log.i(TAG, "Callback: награда получена")
+                    runOnUiThread {
+                        onRewardCallback?.invoke()
+                    }
+                },
+
+                onAdHidden = {
+                    Log.i(TAG, "Callback: реклама скрыта")
+                },
+
+                onAdDisplayed = {
+                    Log.i(TAG, "Callback: реклама показана")
+                },
+
+                autoCloser = closer
+            )
+
+            Log.i(TAG, "Rewarded controller создан")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка создания Rewarded controller", e)
         }
     }
 
@@ -81,8 +165,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        super.onPause()
         isActivityResumed.value = false
+        super.onPause()
     }
 
     private fun exitAppPictureInPicture() {
@@ -94,6 +178,7 @@ class MainActivity : ComponentActivity() {
 
     private fun enterAppPictureInPicture(videoFile: File?) {
         pipVideoFile.value = videoFile
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val params = PictureInPictureParams.Builder().build()
             enterPictureInPictureMode(params)
@@ -106,16 +191,22 @@ class MainActivity : ComponentActivity() {
         isInPictureInPictureMode: Boolean,
         newConfig: Configuration
     ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        super.onPictureInPictureModeChanged(
+            isInPictureInPictureMode,
+            newConfig
+        )
+
         pipMode.value = isInPictureInPictureMode
+
         if (!isInPictureInPictureMode) {
             pipVideoFile.value = null
         }
     }
 
     override fun onDestroy() {
+        controllerState.value = null
+        onRewardCallback = null
         super.onDestroy()
-        controller = null
     }
 }
 
@@ -132,7 +223,11 @@ private fun AdCoinApp(
     val state by vm.state.collectAsState()
 
     if (isInPip) {
-        PipStatus(state.infiniteMode, state.videosCompleted, pipVideoFile)
+        PipStatus(
+            infiniteMode = state.infiniteMode,
+            videosCompleted = state.videosCompleted,
+            videoFile = pipVideoFile
+        )
     } else {
         if (state.tokenPresent) {
             DashboardScreen(
@@ -148,18 +243,37 @@ private fun AdCoinApp(
         }
     }
 
-    LaunchedEffect(state.autoShowNext, state.infiniteMode, isActivityResumed) {
+    LaunchedEffect(
+        state.autoShowNext,
+        state.infiniteMode,
+        isActivityResumed,
+        controller
+    ) {
         if (state.autoShowNext && state.infiniteMode) {
+
             if (!isActivityResumed) {
-                vm.setMessage("Награда подтверждена, следующий ролик готов. Вернитесь в приложение.")
-            } else {
-                vm.consumeAutoShowRequest()
-                val file = controller?.getLatestVideoFile()
-                onEnterPip(file)
-                val shown = controller?.show() == true
-                if (!shown) {
-                    vm.setMessage("Следующий ролик пока не готов. Ожидание MAX.")
-                }
+                vm.setMessage(
+                    "Награда подтверждена. Вернитесь в приложение."
+                )
+                return@LaunchedEffect
+            }
+
+            val activeController = controller
+
+            if (activeController == null || !activeController.isReady()) {
+                vm.setMessage("Ожидание готовности рекламного SDK...")
+                return@LaunchedEffect
+            }
+
+            vm.consumeAutoShowRequest()
+
+            val file = activeController.getLatestVideoFile()
+            onEnterPip(file)
+
+            val shown = activeController.show()
+
+            if (!shown) {
+                vm.setMessage("Следующий ролик пока не готов. Ожидание MAX.")
             }
         }
     }
@@ -175,50 +289,94 @@ private fun DashboardScreen(
     isActivityResumed: Boolean
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Баланс: ${state.balance ?: "Загрузка..."}", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "Баланс: ${state.balance ?: "Загрузка..."}",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
-        
-        Text("Просмотрено роликов: ${state.videosCompleted}", style = MaterialTheme.typography.bodyLarge)
+
+        Text(
+            "Просмотрено роликов: ${state.videosCompleted}",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!state.message.isNullOrEmpty()) {
-            Text(state.message ?: "", color = MaterialTheme.colorScheme.error)
+            Text(
+                state.message ?: "",
+                color = MaterialTheme.colorScheme.error
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
         Button(
             onClick = {
-                val file = controller?.getLatestVideoFile()
+                val activeController = controller ?: return@Button
+
+                val file = activeController.getLatestVideoFile()
                 onEnterPip(file)
-                controller?.show()
+
+                val shown = activeController.show()
+
+                if (!shown) {
+                    Log.w(TAG, "Не удалось показать рекламу")
+                }
             },
-            enabled = controller?.isReady() == true && isActivityResumed && !state.checkingReward,
+            enabled = controller?.isReady() == true &&
+                    isActivityResumed &&
+                    !state.checkingReward,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Смотреть рекламу")
+            Text(
+                if (controller == null) {
+                    "Инициализация рекламы..."
+                } else {
+                    "Смотреть рекламу"
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
-            onClick = { 
-                if (state.infiniteMode) vm.stopInfiniteMode() else vm.startInfiniteMode() 
+            onClick = {
+                if (state.infiniteMode) {
+                    vm.stopInfiniteMode()
+                } else {
+                    vm.startInfiniteMode()
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (state.infiniteMode) "Остановить бесконечный просмотр" else "Запустить бесконечный просмотр")
+            Text(
+                if (state.infiniteMode) {
+                    "Остановить бесконечный просмотр"
+                } else {
+                    "Запустить бесконечный просмотр"
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun PipStatus(infiniteMode: Boolean, videosCompleted: Int, videoFile: File?) {
+private fun PipStatus(
+    infiniteMode: Boolean,
+    videosCompleted: Int,
+    videoFile: File?
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(10.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(10.dp),
         verticalArrangement = Arrangement.Center
     ) {
         if (videoFile != null && videoFile.exists()) {
@@ -226,18 +384,41 @@ private fun PipStatus(infiniteMode: Boolean, videosCompleted: Int, videoFile: Fi
                 factory = { ctx ->
                     android.widget.VideoView(ctx).apply {
                         setVideoPath(videoFile.absolutePath)
-                        setOnPreparedListener { mp ->
-                            mp.isLooping = false
+
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
                             start()
                         }
-                    }
-                },
+
+                        setOnErrorListener { _, what, extra ->
+                            Log.e(
+                                TAG,
+                                "Ошибка воспроизведения PiP: $what / $extra"
+                            )
+                            true
+                        }
+            },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Text("AdReverse · PiP", fontWeight = FontWeight.Bold, color = Color(0xFF8BDAA8))
-            Text(if (infiniteMode) "Просмотр активен: $videosCompleted" else "Приложение свернуто")
-            Text("Ожидание видеоролика...", color = Color.LightGray)
+            Text(
+                "AdReverse · PiP",
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF8BDAA8)
+            )
+
+            Text(
+                if (infiniteMode) {
+                    "Просмотр активен: $videosCompleted"
+                } else {
+                    "Приложение свернуто"
+                }
+            )
+
+            Text(
+                "Ожидание видеоролика...",
+                color = Color.LightGray
+            )
         }
     }
 }
@@ -245,9 +426,11 @@ private fun PipStatus(infiniteMode: Boolean, videosCompleted: Int, videoFile: Fi
 @Composable
 private fun LoginScreen(vm: AdCoinViewModel) {
     val state by vm.state.collectAsState()
-    
+
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         verticalArrangement = Arrangement.Center
     ) {
         OutlinedTextField(
@@ -257,8 +440,9 @@ private fun LoginScreen(vm: AdCoinViewModel) {
             modifier = Modifier.fillMaxWidth(),
             enabled = !state.loading && !state.codeSent
         )
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         if (!state.codeSent) {
             Button(
                 onClick = { vm.sendCode() },
@@ -275,7 +459,9 @@ private fun LoginScreen(vm: AdCoinViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading
             )
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Button(
                 onClick = { vm.login() },
                 enabled = !state.loading,
@@ -284,15 +470,22 @@ private fun LoginScreen(vm: AdCoinViewModel) {
                 Text("Войти")
             }
         }
-        
+
         if (state.loading) {
             Spacer(modifier = Modifier.height(8.dp))
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
-        
+
         if (!state.message.isNullOrEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(state.message ?: "", color = MaterialTheme.colorScheme.error)
+
+            Text(
+                state.message ?: "",
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
