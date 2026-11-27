@@ -62,20 +62,23 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
-        var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
+     var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
 
-        if (expectedPackage.isNullOrBlank()) {
-            val eventPackage = event.packageName?.toString()
-            if (!eventPackage.isNullOrBlank() &&
-                eventPackage != packageName &&
-                eventPackage != "com.android.systemui"
-            ) {
-                expectedPackage = eventPackage
-                prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
-                Log.i(TAG, "locked ad package: $expectedPackage")
-            }
-        }
+// Не даём залочить лаунчер или systemui
+if (expectedPackage.isNullOrBlank() || 
+    expectedPackage == "com.blackview.launcher" ||
+    expectedPackage == "com.android.systemui") {
 
+    val eventPackage = event.packageName?.toString()
+    if (!eventPackage.isNullOrBlank() &&
+        eventPackage != "com.android.systemui" &&
+        eventPackage != "com.blackview.launcher"
+    ) {
+        expectedPackage = eventPackage
+        prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
+        Log.i(TAG, "locked ad package: $expectedPackage")
+    }
+}
         val roots = collectAdRoots(expectedPackage).toMutableList()
 
         // Fallback: если ничего не нашли по фильтру — берём активное окно
