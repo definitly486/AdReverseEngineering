@@ -45,7 +45,7 @@
 
         <activity
             android:name=".StatsActivity"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTask"
             android:taskAffinity="com.pavloffmedev.dcn.stats"
             android:resizeableActivity="true">
