@@ -5,7 +5,7 @@ import json, sys, uuid, logging, re
 from pathlib import Path
 from typing import Any
 import requests
-from PySide6.QtCore import QObject, QThread, Signal, Qt, QUrl
+from PySide6.QtCore import QObject, QThread, Signal, Qt, QUrl, QTimer
 from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget,
     QFileDialog, QListWidget, QInputDialog, QSlider)
@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("AdCoin — Linux"); self.setMinimumSize(560, 360)
-        self.session = load_session(); self.thread = None
+        self.session = load_session(); self.thread = None; self.worker = None
         self.heading = QLabel("AdCoin")
         # Video playback is independent from account balance and rewards.
         self.player = QMediaPlayer(self)
@@ -385,7 +385,15 @@ class MainWindow(QMainWindow):
         logger.info("AdCoin Linux client starting; session_file_exists=%s log_file=%s",
                     STATE.is_file(), LOG_FILE)
         self.apply_session()
-        if self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken"): self.refresh()
+        has_token = bool(self.session.get("access_token") or
+                         (self.session.get("raw_response") or {}).get("accessToken"))
+        logger.info("Startup session check: token_present=%s session_fields=%s",
+                    has_token, list(self.session.keys()))
+        if has_token:
+            # Start after the window enters the Qt event loop.
+            QTimer.singleShot(0, self.refresh)
+        else:
+            logger.warning("No access token found; automatic balance refresh skipped")
 
 
     def add_video_files(self):
@@ -464,14 +472,30 @@ class MainWindow(QMainWindow):
         self.balance.setText("Баланс: —"); self.earnings.setText("Заработано: —"); self.withdrawal.setText("Доступно к выводу: —")
 
     def refresh(self):
-        if not (self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken")):
+        token = self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken")
+        logger.info("Refresh requested; token_present=%s", bool(token))
+        if not token:
+            logger.warning("Refresh cancelled: no access token in loaded session")
             QMessageBox.information(self, "AdCoin", "Сначала войдите в аккаунт."); return
-        self.refresh_button.setEnabled(False); self.status.setText("Загрузка данных…")
-        self.thread = QThread(self); worker = BalanceWorker(self.session); worker.moveToThread(self.thread)
-        self.thread.started.connect(worker.run); worker.finished.connect(self.show_data); worker.failed.connect(self.show_error)
-        worker.finished.connect(self.thread.quit); worker.failed.connect(self.thread.quit)
-        self.thread.finished.connect(worker.deleteLater); self.thread.finished.connect(self.thread.deleteLater)
-        self.thread.finished.connect(lambda: self.refresh_button.setEnabled(True)); self.thread.start()
+        if self.thread is not None and self.thread.isRunning():
+            logger.info("Refresh skipped: previous balance worker is still running")
+            return
+        self.refresh_button.setEnabled(False)
+        self.status.setText("Загрузка данных…")
+        self.thread = QThread(self)
+        self.worker = BalanceWorker(self.session)
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.show_data)
+        self.worker.failed.connect(self.show_error)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.failed.connect(self.thread.quit)
+        self.thread.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.finished.connect(lambda: self.refresh_button.setEnabled(True))
+        self.thread.finished.connect(lambda: setattr(self, "worker", None))
+        logger.info("Starting balance QThread")
+        self.thread.start()
 
     def show_data(self, data):
         logger.info("UI received account data; fields=%s", list(data.keys()))
