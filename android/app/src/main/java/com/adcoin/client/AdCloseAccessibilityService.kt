@@ -105,67 +105,26 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }
 
         for (root in roots) {
-            // Сохраняем существующий поиск слева и дополнительно ищем область X справа.
-            val leftResult = findCornerTarget(root, topRight = false)
-            val rightResult = findCornerTarget(root, topRight = true)
-            val radiusPx = (10f * resources.displayMetrics.densityDpi / 2.54f).toInt()
-            val tapTargets = mutableListOf<Rect>()
-            // Каждый угол обрабатывается независимо: если у X нет clickable-узлов,
-            // это не должно мешать координатному тапу по найденному ImageView.
-            leftResult?.first?.let { anchor ->
-                val before = tapTargets.size
-                collectClickableTargetsInRadius(anchor, root, radiusPx, tapTargets)
-                if (tapTargets.size == before) {
-                    Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
-                }
-            }
-            // Кнопку X самого маленького окна намеренно не нажимаем:
-            // она может перекрывать рекламные элементы и закрывать всё окно.
-            // Все найденные цели в верхнем правом углу окна отфильтруем ниже.
-
-
-            val closeBounds = rightResult?.first?.let { Rect().also(it::getBoundsInScreen) }
-            val filteredTargets = tapTargets.filterNot { target ->
-                // Исключаем только сам найденный X (или маленькую кликабельную
-                // область, центр которой попадает внутрь bounds узла X).
-                // Не фильтруем всю верхнюю правую часть окна: это могло задеть
-                // обычные цели, собранные поиском от левого верхнего угла.
-                val isCloseControl = closeBounds != null && !closeBounds.isEmpty &&
-                        target.width() <= 120 && target.height() <= 120 &&
-                        closeBounds.contains(target.exactCenterX().toInt(), target.exactCenterY().toInt())
-                if (isCloseControl) Log.i(TAG, "excluded identified X control bounds=$target xBounds=$closeBounds")
-                isCloseControl
-            }
-            // Перед отправкой жеста обрезаем каждую цель границами именно
-            // маленького рекламного окна. Это не даст координатам уйти наружу,
-            // даже если Accessibility вернул bounds родительского/перекрывающего узла.
+            // Слепые координатные тапы: не ищем текст, viewId или clickable-узлы.
+            // Обе точки рассчитываются от bounds маленького рекламного окна,
+            // поэтому жесты попадают внутрь окна, а не в элементы рабочего стола.
+            // Правая точка отнесена от правого края, где находится X.
             val windowBounds = Rect().also(root::getBoundsInScreen)
-            val insideWindowTargets = filteredTargets.mapNotNull { target ->
-                val clipped = Rect(target)
-                if (windowBounds.isEmpty || !clipped.intersect(windowBounds)) return@mapNotNull null
-                // Не нажимаем по самой рамке окна: берём точку строго внутри.
-                if (clipped.width() > 2) {
-                    clipped.left = (clipped.left + 1).coerceAtMost(clipped.right - 1)
-                    clipped.right = (clipped.right - 1).coerceAtLeast(clipped.left + 1)
-                }
-                if (clipped.height() > 2) {
-                    clipped.top = (clipped.top + 1).coerceAtMost(clipped.bottom - 1)
-                    clipped.bottom = (clipped.bottom - 1).coerceAtLeast(clipped.top + 1)
-                }
-                Log.i(TAG, "tap target clipped to window target=$target clipped=$clipped window=$windowBounds")
-                clipped
-            }
-            val uniqueTargets = insideWindowTargets.distinctBy { it.flattenToString() }
-            if (uniqueTargets.isEmpty()) {
-                Log.i(TAG, "no tap targets inside small ad window after excluding close control")
+            if (windowBounds.isEmpty || windowBounds.width() < 4 || windowBounds.height() < 4) {
+                Log.w(TAG, "skip invalid ad window bounds=$windowBounds")
                 continue
             }
-
-            val labels = listOfNotNull(
-                leftResult?.first?.let { "LEFT:${describe(it)}" },
+            val tapY = (windowBounds.top + windowBounds.height() * 0.125f).toInt()
+            val leftX = (windowBounds.left + windowBounds.width() * 0.20f).toInt()
+            val rightX = (windowBounds.left + windowBounds.width() * 0.80f).toInt()
+            val y = tapY.coerceIn(windowBounds.top + 1, windowBounds.bottom - 2)
+            val leftPoint = leftX.coerceIn(windowBounds.left + 1, windowBounds.right - 2)
+            val rightPoint = rightX.coerceIn(windowBounds.left + 1, windowBounds.right - 2)
+            val uniqueTargets = listOf(
+                Rect(leftPoint, y, leftPoint + 1, y + 1),
+                Rect(rightPoint, y, rightPoint + 1, y + 1)
             )
-            Log.i(TAG, "corner radius taps radiusCm=10 radiusPx=$radiusPx targets=${uniqueTargets.size} " +
-                    "anchors=$labels bounds=$uniqueTargets")
+            Log.i(TAG, "blind inside-window taps left=($leftPoint,$y) right=($rightPoint,$y) window=$windowBounds")
 
             dispatchTapSequence(uniqueTargets, 0)
             prefs.edit()
