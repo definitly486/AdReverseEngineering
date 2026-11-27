@@ -165,8 +165,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 "Режим: экран может выключаться. Фоновая сессия сохраняется; показ MAX продолжится после разблокировки."
             }
         )
+        // Apply the new mode immediately to the visible window, including MAX's ad Activity.
+        ScreenPowerController.applyModeToResumedActivities(getApplication(), mode)
         if (_state.value.infiniteMode) {
-            // onStartCommand re-reads the preference and swaps the wake lock.
+            // The service keeps CPU work alive; Activity windows control the display.
             BackgroundViewingService.start(getApplication())
         }
     }
