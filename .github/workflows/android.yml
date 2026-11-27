@@ -59,8 +59,6 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           APPLOVIN_SDK_KEY: ${{ secrets.APPLOVIN_SDK_KEY }}
           APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
-          GMA_APP_ID: ${{ secrets.GMA_APP_ID }}
-          GMA_PIP_AD_UNIT_ID: ${{ secrets.GMA_PIP_AD_UNIT_ID }}
           ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
         run: gradle --no-daemon --stacktrace assembleRelease
