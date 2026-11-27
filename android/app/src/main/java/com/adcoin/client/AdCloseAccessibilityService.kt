@@ -19,6 +19,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private var lastTreeDumpAt = 0L
     private var armedAt = 0L
     private var lastBlindClickAt = 0L
+    private var lastWindowDumpAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
@@ -65,6 +66,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         // Есть маленькие окна — работаем ТОЛЬКО с ними
         val root = ourSmallWindows.first()
         val rootRect = Rect().also { root.getBoundsInScreen(it) }
+        dumpWindowTree(root)
 
         // 1. Сначала обычный поиск внутри маленького окна
         val result = findFirstTarget(root)
@@ -85,12 +87,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val closeY = rootRect.top + rootRect.height() * 0.10f
             gestureClick(closeX, closeY, "X")
 
-            // Точка 2: кнопка Install / Google Play (низ по центру)
-            mainHandler.postDelayed({
-                val instX = rootRect.left + rootRect.width() * 0.50f
-                val instY = rootRect.top + rootRect.height() * 0.82f
-                gestureClick(instX, instY, "INSTALL")
-            }, 700)
+            // Не выполняем слепой клик по рекламному CTA: координаты без
+            // подтверждённого элемента могут привести к нажатию не той кнопки.
         }
     }
 
@@ -174,7 +172,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val canClick = node.isClickable || hasClickableParent(node)
 
             if (canClick) {
-                if (GP_WORDS.any { label.contains(it) }) return node to true
+                if (GP_WORDS.any { label.contains(it) }) {
+                    val bounds = Rect().also(node::getBoundsInScreen)
+                    Log.i(TAG, "CTA candidate (not auto-clicked): label=" + label +
+                            " bounds=" + bounds + " clickable=" + node.isClickable +
+                            " class=" + node.className)
+                }
                 if (CLOSE_WORDS.any { label.contains(it) } || isX(node)) return node to false
             }
 
@@ -201,6 +204,32 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }
 
         return if (aggressive && best != null) best to false else null
+    }
+
+    private fun dumpWindowTree(root: AccessibilityNodeInfo) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastWindowDumpAt < 3000L) return
+        lastWindowDumpAt = now
+
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var count = 0
+        while (queue.isNotEmpty() && count < 100) {
+            val node = queue.removeFirst()
+            val bounds = Rect().also(node::getBoundsInScreen)
+            val label = describe(node).trim()
+            if (label.isNotEmpty() || node.isClickable) {
+                Log.d(TAG, "window-node[" + count + "] label=" + label +
+                        " bounds=" + bounds + " clickable=" + node.isClickable +
+                        " enabled=" + node.isEnabled + " id=" + node.viewIdResourceName +
+                        " class=" + node.className)
+            }
+            count++
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let(queue::add)
+            }
+        }
+        Log.d(TAG, "window tree dump complete: nodes=" + count)
     }
 
     private fun describe(n: AccessibilityNodeInfo) =
