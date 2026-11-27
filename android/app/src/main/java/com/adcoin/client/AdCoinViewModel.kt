@@ -35,12 +35,23 @@ data class ClientState(
 class AdCoinViewModel(application: Application) : AndroidViewModel(application) {
     private val store = SecureSessionStore(application)
     private val api = AdCoinApi(store)
+    private val backgroundPrefs = application.getSharedPreferences(
+        BackgroundViewingService.PREFS_NAME, Application.MODE_PRIVATE
+    )
     private val _state = MutableStateFlow(
-        ClientState(tokenPresent = !store.token().isNullOrBlank(), userId = store.userId())
+        ClientState(
+            tokenPresent = !store.token().isNullOrBlank(),
+            userId = store.userId(),
+            infiniteMode = backgroundPrefs.getBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false)
+        )
     )
     val state: StateFlow<ClientState> = _state.asStateFlow()
 
     init {
+        if (_state.value.infiniteMode && _state.value.tokenPresent) {
+            // Restore only the user-visible session. MAX ad playback itself is Activity-bound.
+            BackgroundViewingService.start(application)
+        }
         if (_state.value.tokenPresent) refreshWallet()
     }
 
@@ -121,6 +132,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             _state.value = _state.value.copy(message = "Нет userId — бесконечный режим недоступен.")
             return
         }
+        backgroundPrefs.edit().putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, true).apply()
+        BackgroundViewingService.start(getApplication())
         _state.value = _state.value.copy(
             infiniteMode = true,
             videosCompleted = 0,
@@ -133,6 +146,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Stop the cycle and cancel any further auto-prompts for the next video. */
     fun stopInfiniteMode() {
+        backgroundPrefs.edit().putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false).apply()
+        BackgroundViewingService.stop(getApplication())
         _state.value = _state.value.copy(
             infiniteMode = false,
             autoShowNext = false,
@@ -230,6 +245,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun logout() {
+        backgroundPrefs.edit().putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false).apply()
+        BackgroundViewingService.stop(getApplication())
         store.clear()
         _state.value = ClientState()
     }
