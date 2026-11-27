@@ -253,22 +253,28 @@ class BalanceWorker(QObject):
             client = build_session(token)
             results: dict[str, Any] = {}
 
-            # Профиль и userId из основного API.
-            logger.info("Step 1/4: requesting getUserData")
-            results["userData"] = request_json(client, "POST",
-                f"{api}/adcoin/getUserData", json_body={
-                    "accessToken": token,
-                    "versionName": "2.0.0",
-                    "versionCode": "1",
-                    "androidSDK": 0,
-                    "lang": "en",
-                    "country": "",
-                    "messagingToken": None,
-                    "simCountryIso": None,
-                    "currencyCode": "USD",
-                })
-
-            logger.info("getUserData completed; response=%s", response_shape(results["userData"]))
+            # getUserData is an optional profile endpoint. Do not let it
+            # block the known-working balance/statistics requests if unavailable.
+            logger.info("Step 1/4: requesting optional getUserData")
+            try:
+                results["userData"] = request_json(client, "POST",
+                    f"{api}/adcoin/getUserData", json_body={
+                        "accessToken": token,
+                        "versionName": "2.0.0",
+                        "versionCode": "1",
+                        "androidSDK": 0,
+                        "lang": "en",
+                        "country": "",
+                        "messagingToken": None,
+                        "simCountryIso": None,
+                        "currencyCode": "USD",
+                    })
+                logger.info("getUserData completed; response=%s",
+                            response_shape(results["userData"]))
+            except Exception as exc:
+                results["userData"] = {}
+                logger.warning("Optional getUserData failed; continuing with balance APIs: %s",
+                               exc)
             # Эти запросы перенесены из рабочего cmd_balance без смены API.
             device_id = self.session.get("device_id") or str(uuid.uuid4())
             advertising_id = self.session.get("advertising_id") or str(uuid.uuid4())
