@@ -78,7 +78,7 @@ class BackgroundViewingService : Service() {
         return builder
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("AdReverse · бесконечный просмотр")
-            .setContentText("Сессия активна. Откройте приложение для управления просмотром.")
+            .setContentText("Сессия сохранена. Для следующего полноэкранного показа MAX вернитесь в AdReverse.")
             .setContentIntent(openApp)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
