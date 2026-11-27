@@ -36,6 +36,9 @@ android {
         manifestPlaceholders["applovinSdkKey"] = applovinSdkKey
         buildConfigField("String", "APPLOVIN_SDK_KEY", "\"$applovinSdkKey\"")
         buildConfigField("String", "APPLOVIN_REWARDED_AD_UNIT_ID", "\"$rewardedAdUnitId\"")
+        buildConfigField("String", "BUILD_BRANCH", "\"$buildBranch\"")
+        buildConfigField("String", "BUILD_COMMIT", "\"$buildCommit\"")
+        buildConfigField("String", "BUILD_TIME", "\"$buildTime\"")
     }
 
     signingConfigs {
