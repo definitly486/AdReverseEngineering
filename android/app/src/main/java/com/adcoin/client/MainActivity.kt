@@ -76,10 +76,18 @@ class MainActivity : ComponentActivity() {
                     .setMediationProvider("max")
                     .build()
 
+            val sdk = AppLovinSdk.getInstance(this)
+            val userId = adCoinViewModel?.state?.value?.userId
+            if (!userId.isNullOrBlank()) {
+                sdk.settings.userIdentifier = userId
+                Log.i(TAG, "AppLovin userIdentifier установлен для аккаунта AdCoin")
+            } else {
+                Log.w(TAG, "AdCoin userId пока недоступен; AppLovin userIdentifier не установлен")
+            }
+
             Log.i(TAG, "Инициализация AppLovin SDK")
 
-            AppLovinSdk.getInstance(this)
-                .initialize(initConfig) {
+            sdk.initialize(initConfig) {
                     Log.i(TAG, "AppLovin SDK инициализирован")
 
                     runOnUiThread {
