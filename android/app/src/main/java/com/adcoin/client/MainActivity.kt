@@ -147,7 +147,7 @@ private fun AdCoinApp(
     }
     LaunchedEffect(state.autoShowNext, state.infiniteMode, isActivityResumed.value) {
         if (state.autoShowNext && state.infiniteMode) {
-            if (!isActivityResumed) {
+            if (!isActivityResumed.value) {
                 vm.setMessage("Награда подтверждена, следующий ролик готов к запуску. Вернитесь в AdReverse: Android блокирует открытие MAX-рекламы из фона.")
             } else {
                 vm.consumeAutoShowRequest()
@@ -307,7 +307,7 @@ private fun DashboardScreen(
                 } else {
                     Text(
                         if (state.checkingReward || state.rewardInFlight) "Проверяем начисление…"
-                        else if (!isActivityResumed.value) "Сессия работает в фоне; следующий показ ожидает возврата в AdReverse"
+                        else if (!isActivityResumed) "Сессия работает в фоне; следующий показ ожидает возврата в AdReverse"
                         else "Автоматический цикл активен",
                         color = Color(0xFF8BDAA8)
                     )
