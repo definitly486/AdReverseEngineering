@@ -46,3 +46,25 @@ The reverse-engineering reports did not establish an AdCoin client-side reward-c
 MAX's server-to-server callback configuration is managed in the publisher's MAX dashboard and is not part of this client. The app sets MAX's user identifier to the AdCoin account ID when that ID is returned by the account API. If the profile response does not expose a usable ID, rewarded ads remain disabled rather than sending an access token as the user ID.
 
 This is an initial implementation. Verify the API response schema and the publisher's MAX ad-unit configuration with a test account before production use.
+
+
+## Launch directly in Android Freeform
+
+On devices that support Freeform, use the repository-root `launch-freeform.sh`
+script from a computer with ADB installed and the device connected with USB
+debugging authorized:
+
+```bash
+./launch-freeform.sh
+```
+
+The script enables Android's Freeform/resizable-activity settings and starts
+`com.adcoin.client.MainActivity` with `--windowingMode 5`. MAX fullscreen
+Activities then inherit the task's Freeform windowing mode, as long as Android
+and the device firmware allow it.
+
+Android does not expose a public app API that lets an ordinary third-party
+application force its own launcher task into Freeform. Therefore, launching
+the app by tapping its normal home-screen icon may still open it fullscreen;
+use the ADB launcher script (or the device launcher's own “Freeform” action)
+to start it in a floating window. No root access is required.
