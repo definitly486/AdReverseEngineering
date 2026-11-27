@@ -159,9 +159,11 @@ class AdAutoCloser(
         const val KEY_LAST_CLICK = "last_accessibility_click"
         const val KEY_LAST_RESULT = "last_result"
         const val KEY_AD_PACKAGE = "ad_package"
-        private val AD_CTA_WORDS = listOf(
-           
-        )
+       private val AD_CTA_WORDS = listOf(
+    "google play", "play store", "install", "open", "download",
+    "get the app", "get app", "learn more", "shop now",
+    "установить", "скачать", "открыть", "перейти", "подробнее"
+)
         private const val TAG = "AdCoin.AutoClose"
     }
 }
