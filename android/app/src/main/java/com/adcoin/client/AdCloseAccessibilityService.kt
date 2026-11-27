@@ -65,6 +65,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     "active=${window.isActive} focused=${window.isFocused} " +
                     "pkg=$pkg bounds=$bounds title=${window.title}"
             )
+            inspectAdControls(root, source)
             dumpTree(root, source)
         }
 
@@ -87,6 +88,74 @@ class AdCloseAccessibilityService : AccessibilityService() {
             }
         }
         Log.i(TAG, "DIAG_END windows=${seen.size}; read-only mode, no input sent")
+    }
+
+    /**
+     * Finds the Google Play CTA for diagnostics only and closes the ad only
+     * when an explicit, clearly-labelled close/dismiss/skip control is exposed.
+     * We never activate install/store/advertiser CTA controls.
+     */
+    private fun inspectAdControls(root: AccessibilityNodeInfo, source: String) {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_NODES) {
+            val node = queue.removeFirst()
+            visited++
+
+            val text = node.text?.toString()?.trim().orEmpty()
+            val description = node.contentDescription?.toString()?.trim().orEmpty()
+            val viewId = node.viewIdResourceName.orEmpty()
+            val label = listOf(text, description, viewId).joinToString(" ").lowercase()
+            val bounds = Rect().also(node::getBoundsInScreen)
+
+            val isGooglePlayCta = label.contains("google play") ||
+                label.contains("play store") ||
+                label.contains("install now") ||
+                label == "install"
+            if (isGooglePlayCta && bounds.width() > 0 && bounds.height() > 0) {
+                Log.i(TAG, "CTA_DETECTED type=google_play action=none source=$source text=$text desc=$description viewId=$viewId bounds=$bounds")
+            }
+
+            val exactCloseLabel = text.equals("x", true) ||
+                text.equals("×", true) ||
+                text.equals("close", true) ||
+                text.equals("dismiss", true) ||
+                text.equals("skip", true)
+            val closeMetadata = description.equals("close", true) ||
+                description.equals("dismiss", true) ||
+                description.equals("skip", true) ||
+                viewId.contains("close", true) ||
+                viewId.contains("dismiss", true) ||
+                viewId.contains("skip", true)
+            val isCloseControl = (exactCloseLabel || closeMetadata) &&
+                node.isClickable && node.isEnabled && node.isVisibleToUser &&
+                bounds.width() > 0 && bounds.height() > 0
+
+            if (isCloseControl) {
+                Log.i(TAG, "CLOSE_CANDIDATE source=$source text=$text desc=$description viewId=$viewId bounds=$bounds")
+                val prefs = getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
+                val alreadyClicked = prefs.getBoolean(KEY_CLOSE_CLICKED, false)
+                if (!alreadyClicked) {
+                    val clicked = runCatching {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }.getOrDefault(false)
+                    if (clicked) {
+                        prefs.edit().putBoolean(KEY_CLOSE_CLICKED, true)
+                            .putString(AdAutoCloser.KEY_LAST_RESULT, "explicit close control clicked at $bounds")
+                            .apply()
+                        Log.i(TAG, "CLOSE_CLICK_SENT source=$source bounds=$bounds")
+                    } else {
+                        Log.i(TAG, "CLOSE_CLICK_REJECTED source=$source bounds=$bounds")
+                    }
+                }
+            }
+
+            for (i in 0 until node.childCount) {
+                try { node.getChild(i)?.let(queue::add) }
+                catch (_: Exception) { }
+            }
+        }
     }
 
     private fun dumpTree(root: AccessibilityNodeInfo, source: String) {
@@ -123,5 +192,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val TAG = "AdCoin.AccessClose"
         private const val DUMP_INTERVAL_MS = 2_000L
         private const val MAX_NODES = 160
+        private const val KEY_CLOSE_CLICKED = "close_control_clicked"
     }
 }
