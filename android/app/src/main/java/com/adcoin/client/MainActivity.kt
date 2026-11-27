@@ -2,7 +2,9 @@
 package com.adcoin.client
 
 import android.app.PictureInPictureParams
+import android.content.ComponentName
 import android.content.Intent
+import android.provider.Settings
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -38,6 +40,8 @@ class MainActivity : ComponentActivity() {
     private val pipVideoFile = mutableStateOf<File?>(null)
     private val pipMode = mutableStateOf(false)
     private val isActivityResumed = mutableStateOf(false)
+    private val accessibilityServiceEnabled = mutableStateOf(false)
+    private val showAccessibilityWarning = mutableStateOf(false)
 
     private var adCoinViewModel: AdCoinViewModel? = null
 
@@ -70,6 +74,10 @@ class MainActivity : ComponentActivity() {
                 onExitPip = ::exitAppPictureInPicture,
                 controller = controllerState.value,
                 isActivityResumed = isActivityResumed.value,
+                accessibilityServiceEnabled = accessibilityServiceEnabled.value,
+                showAccessibilityWarning = showAccessibilityWarning.value,
+                onOpenAccessibilitySettings = ::openAccessibilitySettings,
+                onDismissAccessibilityWarning = { showAccessibilityWarning.value = false },
                 onLaunchFreeform = ::requestFreeformLaunch,
                 vm = vm
             )
@@ -170,6 +178,35 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isActivityResumed.value = true
+
+        val enabled = isAdCloseAccessibilityServiceEnabled()
+        accessibilityServiceEnabled.value = enabled
+        showAccessibilityWarning.value = !enabled
+        Log.i(TAG, "AdCloseAccessibilityService enabled=$enabled")
+    }
+
+    private fun isAdCloseAccessibilityServiceEnabled(): Boolean {
+        val expectedComponent = ComponentName(
+            this,
+            AdCloseAccessibilityService::class.java
+        )
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+
+        return enabledServices.split(':').any { flattenedComponent ->
+            ComponentName.unflattenFromString(flattenedComponent) == expectedComponent
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось открыть настройки специальных возможностей", e)
+            showToast("Не удалось открыть настройки специальных возможностей")
+        }
     }
 
     private fun requestFreeformLaunch() {
@@ -286,10 +323,38 @@ private fun AdCoinApp(
     onExitPip: () -> Unit,
     controller: MaxRewardedController?,
     isActivityResumed: Boolean,
+    accessibilityServiceEnabled: Boolean,
+    showAccessibilityWarning: Boolean,
+    onOpenAccessibilitySettings: () -> Unit,
+    onDismissAccessibilityWarning: () -> Unit,
     onLaunchFreeform: () -> Unit,
     vm: AdCoinViewModel
 ) {
     val state by vm.state.collectAsState()
+
+    if (showAccessibilityWarning && !accessibilityServiceEnabled) {
+        AlertDialog(
+            onDismissRequest = onDismissAccessibilityWarning,
+            title = { Text("Требуется специальное разрешение") },
+            text = {
+                Text(
+                    "Для автоматического закрытия рекламы необходимо включить " +
+                        "службу специальных возможностей AdReverse. " +
+                        "Без неё автоматическое нажатие кнопки закрытия работать не будет."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onOpenAccessibilitySettings) {
+                    Text("Открыть настройки")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissAccessibilityWarning) {
+                    Text("Позже")
+                }
+            }
+        )
+    }
 
     if (isInPip) {
         PipStatus(
@@ -307,6 +372,10 @@ private fun AdCoinApp(
                 onEnterPip = onEnterPip,
                 onExitPip = onExitPip,
                 isActivityResumed = isActivityResumed,
+                accessibilityServiceEnabled = accessibilityServiceEnabled,
+                showAccessibilityWarning = showAccessibilityWarning,
+                onOpenAccessibilitySettings = onOpenAccessibilitySettings,
+                onDismissAccessibilityWarning = onDismissAccessibilityWarning,
                 onLaunchFreeform = onLaunchFreeform
             )
         } else {
@@ -360,6 +429,10 @@ private fun DashboardScreen(
     onEnterPip: (File?) -> Unit,
     onExitPip: () -> Unit,
     isActivityResumed: Boolean,
+    accessibilityServiceEnabled: Boolean,
+    showAccessibilityWarning: Boolean,
+    onOpenAccessibilitySettings: () -> Unit,
+    onDismissAccessibilityWarning: () -> Unit,
     onLaunchFreeform: () -> Unit
 ) {
     Column(
