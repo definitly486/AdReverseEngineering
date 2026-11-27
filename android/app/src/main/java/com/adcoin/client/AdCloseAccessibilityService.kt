@@ -12,12 +12,15 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import java.util.ArrayDeque
+import kotlin.math.minOf
 
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
  *
  * Behaviour:
- * - Clicks whichever appears first: Google Play / Install or Close (X)
+ * - For small windows (e.g., PiP or small overlays < 800x800): clicks the best candidate 
+ *   in the TOP-LEFT corner INSTEAD of searching for Google Play / Install buttons.
+ * - For normal windows: Clicks whichever appears first: Google Play / Install or Close (X)
  * - After clicking Google Play immediately presses BACK (to avoid leaving the ad)
  * - After ~8 seconds of no success switches to aggressive mode
  *   (clicks best small clickable control in the top-right corner of the ad window)
@@ -62,23 +65,24 @@ class AdCloseAccessibilityService : AccessibilityService() {
         val last = prefs.getLong(AdAutoCloser.KEY_LAST_CLICK, 0L)
         if (now - last < CLICK_COOLDOWN_MS) return
 
-     var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
+        var expectedPackage = prefs.getString(AdAutoCloser.KEY_AD_PACKAGE, null)
 
-// Не даём залочить лаунчер или systemui
-if (expectedPackage.isNullOrBlank() || 
-    expectedPackage == "com.blackview.launcher" ||
-    expectedPackage == "com.android.systemui") {
+        // Не даём залочить лаунчер или systemui
+        if (expectedPackage.isNullOrBlank() || 
+            expectedPackage == "com.blackview.launcher" ||
+            expectedPackage == "com.android.systemui") {
 
-    val eventPackage = event.packageName?.toString()
-    if (!eventPackage.isNullOrBlank() &&
-        eventPackage != "com.android.systemui" &&
-        eventPackage != "com.blackview.launcher"
-    ) {
-        expectedPackage = eventPackage
-        prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
-        Log.i(TAG, "locked ad package: $expectedPackage")
-    }
-}
+            val eventPackage = event.packageName?.toString()
+            if (!eventPackage.isNullOrBlank() &&
+                eventPackage != "com.android.systemui" &&
+                eventPackage != "com.blackview.launcher"
+            ) {
+                expectedPackage = eventPackage
+                prefs.edit().putString(AdAutoCloser.KEY_AD_PACKAGE, expectedPackage).apply()
+                Log.i(TAG, "locked ad package: $expectedPackage")
+            }
+        }
+        
         val roots = collectAdRoots(expectedPackage).toMutableList()
 
         // Fallback: если ничего не нашли по фильтру — берём активное окно
@@ -141,61 +145,61 @@ if (expectedPackage.isNullOrBlank() ||
      * Собирает корни всех релевантных окон.
      * Критично для multi-window / freeform / PiP.
      */
-  private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
-    val roots = mutableListOf<AccessibilityNodeInfo>()
-    val seen = mutableSetOf<Int>()
+    private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        val seen = mutableSetOf<Int>()
 
-    fun addRoot(node: AccessibilityNodeInfo?, source: String) {
-        if (node == null) return
-        val id = System.identityHashCode(node)
-        if (!seen.add(id)) return
+        fun addRoot(node: AccessibilityNodeInfo?, source: String) {
+            if (node == null) return
+            val id = System.identityHashCode(node)
+            if (!seen.add(id)) return
 
-        val pkg = node.packageName?.toString() ?: return
-        val bounds = Rect().also { node.getBoundsInScreen(it) }
+            val pkg = node.packageName?.toString() ?: return
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
 
-        // Игнорируем только systemui и совсем пустые окна
-        if (pkg == "com.android.systemui") {
-            Log.v(TAG, "ROOT[$source] skipped systemui bounds=$bounds")
-            return
+            // Игнорируем только systemui и совсем пустые окна
+            if (pkg == "com.android.systemui") {
+                Log.v(TAG, "ROOT[$source] skipped systemui bounds=$bounds")
+                return
+            }
+
+            Log.i(TAG, "ROOT[$source] pkg=$pkg bounds=$bounds " +
+                    "childCount=${node.childCount} visible=${node.isVisibleToUser}")
+
+            roots.add(node)
         }
 
-        Log.i(TAG, "ROOT[$source] pkg=$pkg bounds=$bounds " +
-                "childCount=${node.childCount} visible=${node.isVisibleToUser}")
+        // 1. Активное окно
+        addRoot(rootInActiveWindow, "Active")
 
-        roots.add(node)
-    }
-
-    // 1. Активное окно
-    addRoot(rootInActiveWindow, "Active")
-
-    // 2. Все окна
-    try {
-        windows?.forEachIndexed { index, window ->
-            Log.i(TAG, "WINDOW[$index] type=${window.type} layer=${window.layer} title=${window.title}")
-            addRoot(window.root, "Win$index")
-        }
-    } catch (e: Exception) {
-        Log.e(TAG, "windows failed", e)
-    }
-
-    // 3. Все дисплеи (Android 11+)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        // 2. Все окна
         try {
-            val all = windowsOnAllDisplays
-            for (i in 0 until all.size()) {
-                val list = all.valueAt(i)
-                list?.forEachIndexed { j, window ->
-                    addRoot(window.root, "Display${all.keyAt(i)}-Win$j")
-                }
+            windows?.forEachIndexed { index, window ->
+                Log.i(TAG, "WINDOW[$index] type=${window.type} layer=${window.layer} title=${window.title}")
+                addRoot(window.root, "Win$index")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "windowsOnAllDisplays failed", e)
+            Log.e(TAG, "windows failed", e)
         }
-    }
 
-    Log.i(TAG, "collectAdRoots TOTAL: ${roots.size} roots")
-    return roots
-}
+        // 3. Все дисплеи (Android 11+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val all = windowsOnAllDisplays
+                for (i in 0 until all.size()) {
+                    val list = all.valueAt(i)
+                    list?.forEachIndexed { j, window ->
+                        addRoot(window.root, "Display${all.keyAt(i)}-Win$j")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "windowsOnAllDisplays failed", e)
+            }
+        }
+
+        Log.i(TAG, "collectAdRoots TOTAL: ${roots.size} roots")
+        return roots
+    }
 
     private fun dumpTree(root: AccessibilityNodeInfo) {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
@@ -223,20 +227,40 @@ if (expectedPackage.isNullOrBlank() ||
 
         val now = SystemClock.elapsedRealtime()
         val aggressive = (now - armedAt) > AGGRESSIVE_AFTER_MS
+        
+        val rootRect = Rect().also(root::getBoundsInScreen)
+        // Определяем "маленькое окошко" (например, PiP или небольшой оверлей)
+        // Если ширина и высота меньше 800px, считаем окно маленьким
+        val isSmallWindow = rootRect.width() < 800 && rootRect.height() < 800
+
         var bestCloseCandidate: AccessibilityNodeInfo? = null
         var bestCloseScore = Int.MIN_VALUE
+        
+        var bestTopLeftCandidate: AccessibilityNodeInfo? = null
+        var bestTopLeftScore = Int.MIN_VALUE
 
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
 
-if (node.isEnabled) {   // временно убрали isVisibleToUser
-    val label = describe(node)
+            if (node.isEnabled) {
+                val label = describe(node)
                 val clickable = node.isClickable || hasClickableParent(node)
 
                 if (clickable) {
-                    // 1. Google Play / Install
-                    if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
-                        return node to true
+                    // Для маленького окошка приоритетно ищем элемент в верхнем левом углу
+                    if (isSmallWindow && isInTopLeftCorner(node, root)) {
+                        val score = scoreTopLeftCandidate(node, root)
+                        if (score > bestTopLeftScore) {
+                            bestTopLeftScore = score
+                            bestTopLeftCandidate = node
+                        }
+                    }
+
+                    // Если это НЕ маленькое окно, ищем Google Play (как было раньше)
+                    if (!isSmallWindow) {
+                        if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
+                            return node to true
+                        }
                     }
 
                     // 2. Явный крестик
@@ -253,7 +277,7 @@ if (node.isEnabled) {   // временно убрали isVisibleToUser
                         return node to false
                     }
 
-                    // 4. Агрессивный режим
+                    // 4. Агрессивный режим (верхний правый)
                     if (aggressive && node.isClickable &&
                         isInTopRightCorner(node, root, rightPercent = 0.40f, topPercent = 0.35f)
                     ) {
@@ -269,6 +293,12 @@ if (node.isEnabled) {   // временно убрали isVisibleToUser
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { queue.add(it) }
             }
+        }
+
+        // Если это маленькое окно, возвращаем лучший кандидат из верхнего левого угла
+        if (isSmallWindow && bestTopLeftCandidate != null) {
+            Log.i(TAG, "small window mode: clicking best top-left candidate (score=$bestTopLeftScore)")
+            return bestTopLeftCandidate to false
         }
 
         if (aggressive && bestCloseCandidate != null) {
@@ -330,6 +360,30 @@ if (node.isEnabled) {   // временно убрали isVisibleToUser
         return nearRight && nearTop && sizeOk
     }
 
+    /**
+     * Проверяет, находится ли узел в верхнем левом углу корневого окна.
+     */
+    private fun isInTopLeftCorner(
+        node: AccessibilityNodeInfo,
+        root: AccessibilityNodeInfo,
+        leftPercent: Float = 0.40f,
+        topPercent: Float = 0.35f
+    ): Boolean {
+        val nodeRect = Rect().also(node::getBoundsInScreen)
+        val rootRect = Rect().also(root::getBoundsInScreen)
+        if (rootRect.isEmpty || nodeRect.isEmpty) return false
+
+        val nearLeft = nodeRect.left <= rootRect.left + (rootRect.width() * leftPercent)
+        val nearTop = nodeRect.top <= rootRect.top + (rootRect.height() * topPercent)
+
+        val maxSize = (minOf(rootRect.width(), rootRect.height()) * 0.28f)
+            .toInt()
+            .coerceIn(36, 200)
+        val sizeOk = nodeRect.width() in 16..maxSize && nodeRect.height() in 16..maxSize
+
+        return nearLeft && nearTop && sizeOk
+    }
+
     private fun scoreCloseCandidate(node: AccessibilityNodeInfo, root: AccessibilityNodeInfo): Int {
         val nodeRect = Rect().also(node::getBoundsInScreen)
         val rootRect = Rect().also(root::getBoundsInScreen)
@@ -340,6 +394,22 @@ if (node.isEnabled) {   // временно убрали isVisibleToUser
         val sizePenalty = (nodeRect.width() + nodeRect.height()) / 3
 
         return rightScore + topScore - sizePenalty
+    }
+
+    /**
+     * Оценивает кандидата на роль кнопки закрытия в верхнем левом углу.
+     * Чем ближе к левому и верхнему краю, тем выше оценка.
+     */
+    private fun scoreTopLeftCandidate(node: AccessibilityNodeInfo, root: AccessibilityNodeInfo): Int {
+        val nodeRect = Rect().also(node::getBoundsInScreen)
+        val rootRect = Rect().also(root::getBoundsInScreen)
+        if (rootRect.isEmpty || nodeRect.isEmpty) return Int.MIN_VALUE
+
+        val leftScore = (100 - (nodeRect.left - rootRect.left).toFloat() / rootRect.width() * 100).toInt()
+        val topScore = (100 - (nodeRect.top - rootRect.top).toFloat() / rootRect.height() * 100).toInt()
+        val sizePenalty = (nodeRect.width() + nodeRect.height()) / 3
+
+        return leftScore + topScore - sizePenalty
     }
 
     private fun hasXGlyph(node: AccessibilityNodeInfo): Boolean {
