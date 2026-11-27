@@ -108,8 +108,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
             // Сохраняем существующий поиск слева и дополнительно ищем область X справа.
             val leftResult = findCornerTarget(root, topRight = false)
             val rightResult = findCornerTarget(root, topRight = true)
-            if (leftResult == null && rightResult == null) continue
-
             val radiusPx = (10f * resources.displayMetrics.densityDpi / 2.54f).toInt()
             val tapTargets = mutableListOf<Rect>()
             // Каждый угол обрабатывается независимо: если у X нет clickable-узлов,
@@ -128,6 +126,21 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     Rect().also(anchor::getBoundsInScreen).takeUnless { it.isEmpty }?.let(tapTargets::add)
                 }
             }
+            // Если X вообще отсутствует в Accessibility-дереве, используем верхний правый
+            // угол проверенного рекламного окна и тот же радиус поиска 10 см.
+            if (rightResult == null) {
+                val rootBounds = Rect().also(root::getBoundsInScreen)
+                if (!rootBounds.isEmpty) {
+                    val margin = (24f * resources.displayMetrics.density).toInt()
+                    val x = (rootBounds.right - margin).coerceIn(rootBounds.left, rootBounds.right - 1)
+                    val y = (rootBounds.top + margin).coerceIn(rootBounds.top, rootBounds.bottom - 1)
+                    val before = tapTargets.size
+                    collectClickableTargetsAroundPoint(root, x.toFloat(), y.toFloat(), radiusPx, tapTargets)
+                    if (tapTargets.size == before) tapTargets.add(Rect(x, y, x + 1, y + 1))
+                    Log.w(TAG, "X not present in accessibility tree; top-right fallback point=($x,$y) radiusCm=10")
+                }
+            }
+
             val uniqueTargets = tapTargets.distinctBy { it.flattenToString() }
             if (uniqueTargets.isEmpty()) continue
 
@@ -298,17 +311,27 @@ class AdCloseAccessibilityService : AccessibilityService() {
         radiusPx: Int,
         output: MutableList<Rect>
     ) {
-        val rootBounds = Rect().also(root::getBoundsInScreen)
         val anchorBounds = Rect().also(anchor::getBoundsInScreen)
-        if (rootBounds.isEmpty || anchorBounds.isEmpty ||
-            !rootBounds.contains(anchorBounds.centerX(), anchorBounds.centerY())
+        if (anchorBounds.isEmpty) return
+        collectClickableTargetsAroundPoint(
+            root, anchorBounds.exactCenterX(), anchorBounds.exactCenterY(), radiusPx, output
+        )
+    }
+
+    private fun collectClickableTargetsAroundPoint(
+        root: AccessibilityNodeInfo,
+        centerX: Float,
+        centerY: Float,
+        radiusPx: Int,
+        output: MutableList<Rect>
+    ) {
+        val rootBounds = Rect().also(root::getBoundsInScreen)
+        if (rootBounds.isEmpty || centerX < rootBounds.left || centerX >= rootBounds.right ||
+            centerY < rootBounds.top || centerY >= rootBounds.bottom
         ) return
 
-        val centerX = anchorBounds.exactCenterX()
-        val centerY = anchorBounds.exactCenterY()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
-
         while (queue.isNotEmpty()) {
             val current = queue.removeFirst()
             if (current.isVisibleToUser && current.isEnabled && current.isClickable) {
@@ -318,9 +341,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 ) {
                     val dx = bounds.exactCenterX() - centerX
                     val dy = bounds.exactCenterY() - centerY
-                    if (dx * dx + dy * dy <= radiusPx.toFloat() * radiusPx) {
-                        output.add(bounds)
-                    }
+                    if (dx * dx + dy * dy <= radiusPx.toFloat() * radiusPx) output.add(bounds)
                 }
             }
             for (i in 0 until current.childCount) {
@@ -328,6 +349,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             }
         }
     }
+
 
     /** Последовательно отправляет координатные тапы и показывает маркер каждого тапа. */
     private fun dispatchTapSequence(targets: List<Rect>, index: Int) {
