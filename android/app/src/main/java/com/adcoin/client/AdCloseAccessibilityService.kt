@@ -144,7 +144,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
             Log.v(TAG, "WINDOW_SKIP source=$source pkg=$pkg expected=$expectedPackage")
             return
         }
-        val bounds = Rect().also(root!!::getBoundsInScreen)
+        val rootNode = root ?: return
+        val bounds = Rect().also(rootNode::getBoundsInScreen)
         Log.v(
             TAG,
             "WINDOW source=$source type=${window.type} layer=${window.layer} " +
