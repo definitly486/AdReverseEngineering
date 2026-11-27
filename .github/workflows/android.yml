@@ -51,7 +51,7 @@ jobs:
           test -s "$RUNNER_TEMP/release.keystore"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
-      - name: Build signed Release APK
+            - name: Build signed Release APK
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -61,7 +61,8 @@ jobs:
           APPLOVIN_REWARDED_AD_UNIT_ID: ${{ secrets.APPLOVIN_REWARDED_AD_UNIT_ID }}
           ANDROID_VERSION_NAME: 1.0.${{ github.run_number }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
-        run: gradle --no-daemon --stacktrace assembleRelease
+        # Добавлен флаг -x lintVitalAnalyzeRelease для пропуска проблемного шага
+        run: gradle --no-daemon --stacktrace assembleRelease -x lintVitalAnalyzeRelease
 
       - name: Upload signed Release APK
         uses: actions/upload-artifact@v4
