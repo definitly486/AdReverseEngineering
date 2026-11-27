@@ -138,62 +138,61 @@ class AdCloseAccessibilityService : AccessibilityService() {
      * Собирает корни всех релевантных окон.
      * Критично для multi-window / freeform / PiP.
      */
-    private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        val seen = mutableSetOf<Int>()
+  private fun collectAdRoots(expectedPackage: String?): List<AccessibilityNodeInfo> {
+    val roots = mutableListOf<AccessibilityNodeInfo>()
+    val seen = mutableSetOf<Int>()
 
-        fun addIfValid(node: AccessibilityNodeInfo?) {
-            if (node == null) return
-            val pkg = node.packageName?.toString() ?: return
+    fun addRoot(node: AccessibilityNodeInfo?, source: String) {
+        if (node == null) return
+        val id = System.identityHashCode(node)
+        if (!seen.add(id)) return
 
-            val isOurApp = pkg == packageName
-            val isSystemUi = pkg == "com.android.systemui"
+        val pkg = node.packageName?.toString() ?: "null"
+        val bounds = Rect().also { node.getBoundsInScreen(it) }
 
-            val packageOk = when {
-                expectedPackage.isNullOrBlank() -> !isOurApp && !isSystemUi
-                else -> pkg == expectedPackage || (!isOurApp && !isSystemUi)
-            }
+        Log.i(TAG, "ROOT[$source] pkg=$pkg bounds=$bounds " +
+                "childCount=${node.childCount} visible=${node.isVisibleToUser}")
 
-            if (packageOk && seen.add(System.identityHashCode(node))) {
-                roots.add(node)
-            }
+        // Берём почти всё, кроме собственного приложения и systemui
+        if (pkg != packageName && pkg != "com.android.systemui") {
+            roots.add(node)
         }
+    }
 
-        // 1. Активное окно
-        addIfValid(rootInActiveWindow)
+    // 1. Активное окно
+    addRoot(rootInActiveWindow, "Active")
 
-        // 2. Все интерактивные окна
+    // 2. Все окна
+    try {
+        windows?.forEachIndexed { index, window ->
+            val type = window.type
+            val layer = window.layer
+            Log.i(TAG, "WINDOW[$index] type=$type layer=$layer title=${window.title}")
+            addRoot(window.root, "Win$index")
+        }
+    } catch (e: Exception) {
+        Log.e(TAG, "windows failed", e)
+    }
+
+    // 3. Все дисплеи (Android 11+)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         try {
-            val wins = windows
-            if (wins != null) {
-                for (window in wins) {
-                    addIfValid(window.root)
+            val all = windowsOnAllDisplays
+            for (i in 0 until all.size()) {
+                val displayId = all.keyAt(i)
+                val list = all.valueAt(i)
+                list?.forEachIndexed { j, window ->
+                    addRoot(window.root, "Display$displayId-Win$j")
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "windows enumeration failed", e)
+            Log.e(TAG, "windowsOnAllDisplays failed", e)
         }
-
-        // 3. Android 11+ — окна со всех дисплеев (SparseArray)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            try {
-                val all = windowsOnAllDisplays
-                for (i in 0 until all.size()) {
-                    val list = all.valueAt(i)
-                    if (list != null) {
-                        for (window in list) {
-                            addIfValid(window.root)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "windowsOnAllDisplays failed", e)
-            }
-        }
-
-        Log.i(TAG, "collectAdRoots: found ${roots.size} roots, expectedPackage=$expectedPackage")
-        return roots
     }
+
+    Log.i(TAG, "collectAdRoots TOTAL: ${roots.size} roots")
+    return roots
+}
 
     private fun dumpTree(root: AccessibilityNodeInfo) {
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
