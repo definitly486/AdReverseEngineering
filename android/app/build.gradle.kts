@@ -12,14 +12,12 @@ val rewardedAdUnitId = providers.gradleProperty("APPLOVIN_REWARDED_AD_UNIT_ID")
     .orElse(providers.environmentVariable("APPLOVIN_REWARDED_AD_UNIT_ID"))
     .orElse("")
     .get()
-val gmaAppId = providers.gradleProperty("GMA_APP_ID")
-    .orElse(providers.environmentVariable("GMA_APP_ID"))
-    .orElse("ca-app-pub-3940256099942544~3347511713")
-    .get()
-val gmaPipAdUnitId = providers.gradleProperty("GMA_PIP_AD_UNIT_ID")
-    .orElse(providers.environmentVariable("GMA_PIP_AD_UNIT_ID"))
-    .orElse("/21775744923/example/picture-in-picture")
-    .get()
+val gmaAppId = providers.gradleProperty("GMA_APP_ID").orNull?.takeIf { it.isNotBlank() }
+    ?: providers.environmentVariable("GMA_APP_ID").orNull?.takeIf { it.isNotBlank() }
+    ?: "ca-app-pub-3940256099942544~3347511713"
+val gmaPipAdUnitId = providers.gradleProperty("GMA_PIP_AD_UNIT_ID").orNull?.takeIf { it.isNotBlank() }
+    ?: providers.environmentVariable("GMA_PIP_AD_UNIT_ID").orNull?.takeIf { it.isNotBlank() }
+    ?: "/21775744923/example/picture-in-picture"
 val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
     .orElse("1")
     .get()
