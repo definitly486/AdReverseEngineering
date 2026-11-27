@@ -14,9 +14,8 @@ import java.util.ArrayDeque
 /**
  * Inspects MAX ad windows while an ad is displayed.
  *
- * Google Play / Install CTAs and heuristic close-looking controls are logged
- * for diagnostics only. The service clicks only a clearly labelled close,
- * dismiss or skip control. It never clicks an advertiser CTA or sends BACK.
+ * Clicks the Google Play / Install CTA when it is detected.
+ * Existing close, dismiss and skip handling remains unchanged.
  */
 class AdCloseAccessibilityService : AccessibilityService() {
 
@@ -115,7 +114,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     "roots=${roots.size} heuristicOnlyAfterMs=${AGGRESSIVE_AFTER_MS}"
             )
             roots.values.forEach { (root, source) -> dumpTree(root, source) }
-            Log.i(TAG, "DIAG_END roots=${roots.size}; CTA is diagnostic-only; close heuristics may click")
+            Log.i(TAG, "DIAG_END roots=${roots.size}; Google Play CTA is clickable; close heuristics may click")
         }
 
         // Scan on every accessibility event; only tree logging is throttled.
@@ -178,12 +177,46 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val label = describe(node)
             val isCta = isGooglePlayCta(label)
 
-            if (isCta && !bounds.isEmpty) {
-                Log.i(
-                    TAG,
-                    "CTA_DETECTED type=google_play action=none source=$source " +
-                        "label=$label bounds=$bounds"
-                )
+            if (isCta && node.isVisibleToUser && node.isEnabled && !bounds.isEmpty) {
+                val clickTarget = clickableTarget(node)
+                if (clickTarget != null && containsGooglePlayCta(clickTarget)) {
+                    val prefs = getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
+                    if (!prefs.getBoolean(KEY_CLOSE_CLICKED, false)) {
+                        val targetBounds = Rect().also(clickTarget::getBoundsInScreen)
+                        val clicked = runCatching {
+                            clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        }.onFailure {
+                            Log.w(TAG, "Google Play CTA click failed source=$source label=$label", it)
+                        }.getOrDefault(false)
+
+                        if (clicked) {
+                            prefs.edit()
+                                .putBoolean(KEY_CLOSE_CLICKED, true)
+                                .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
+                                .putString(
+                                    AdAutoCloser.KEY_LAST_RESULT,
+                                    "google-play CTA clicked at $targetBounds"
+                                )
+                                .apply()
+                            Log.i(
+                                TAG,
+                                "GOOGLE_PLAY_CTA_CLICKED source=$source label=$label bounds=$targetBounds"
+                            )
+                            return true
+                        } else {
+                            Log.w(
+                                TAG,
+                                "GOOGLE_PLAY_CTA_CLICK_REJECTED source=$source label=$label bounds=$targetBounds"
+                            )
+                        }
+                    }
+                } else {
+                    Log.i(
+                        TAG,
+                        "CTA_DETECTED type=google_play action=target-not-clickable source=$source " +
+                            "label=$label bounds=$bounds"
+                    )
+                }
             }
 
             val explicitClose = isExplicitClose(node)
