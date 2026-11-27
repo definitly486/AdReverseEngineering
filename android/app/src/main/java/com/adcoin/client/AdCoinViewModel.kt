@@ -1,6 +1,12 @@
 package com.adcoin.client
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
@@ -22,7 +28,6 @@ data class ClientState(
     val dailyTarget: Int? = null,
     val dailyReward: Int? = null,
     val checkingReward: Boolean = false,
-    // Infinite view mode
     val infiniteMode: Boolean = false,
     val videosCompleted: Int = 0,
     val rewardInFlight: Boolean = false,
@@ -115,32 +120,46 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /** Enable infinite mode; first video still requires an explicit user press. */
-    fun startInfiniteMode() {
+    fun startInfiniteMode(context: Context) {
         if (_state.value.userId.isNullOrBlank()) {
             _state.value = _state.value.copy(message = "Нет userId — бесконечный режим недоступен.")
             return
         }
+        
+        // 1. Запрос игнорирования оптимизации батареи
+        requestIgnoreBatteryOptimizations(context)
+        
+        // 2. Запуск фоновой службы
+        val intent = Intent(context, BackgroundKeepAliveService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+
+        // 3. Обновление состояния
         _state.value = _state.value.copy(
             infiniteMode = true,
             videosCompleted = 0,
             autoShowNext = false,
             adHidden = false,
             rewardVerifiedForAd = false,
-            message = "Бесконечный просмотр включён. Нажмите «Смотреть первое видео», чтобы начать."
+            message = "Бесконечный просмотр включён. Фоновая служба активирована."
         )
     }
 
-    /** Stop the cycle and cancel any further auto-prompts for the next video. */
-    fun stopInfiniteMode() {
+    fun stopInfiniteMode(context: Context) {
+        // Остановка фоновой службы
+        val intent = Intent(context, BackgroundKeepAliveService::class.java)
+        context.stopService(intent)
+
         _state.value = _state.value.copy(
             infiniteMode = false,
             autoShowNext = false,
-            message = "Бесконечный просмотр остановлен."
+            message = "Бесконечный просмотр остановлен. Фоновая служба остановлена."
         )
     }
 
-    /** MAX lifecycle callbacks coordinate the next impression. */
     fun onMaxAdLoaded() {
         _state.value = _state.value.copy(adReady = true)
         maybeScheduleNextAd()
@@ -176,7 +195,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onRewarded() {
-        // Guard against re-entrant / duplicate reward processing.
         if (_state.value.rewardInFlight) {
             setMessage("Начисление уже проверяется — повторный callback проигнорирован.")
             return
@@ -215,14 +233,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                 videosCompleted = completed,
                 rewardVerifiedForAd = credited,
                 message = when {
-                    credited && wasInfinite ->
-                        "Сервер подтвердил начисление (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
-                    credited ->
-                        "Сервер подтвердил увеличение баланса."
-                    wasInfinite ->
-                        "Сервер пока не подтвердил награду. Автоматический следующий показ остановлен."
-                    else ->
-                        "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
+                    credited && wasInfinite -> "Сервер подтвердил начисление (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
+                    credited -> "Сервер подтвердил увеличение баланса."
+                    wasInfinite -> "Сервер пока не подтвердил награду. Автоматический следующий показ остановлен."
+                    else -> "Показ завершён, но серверное начисление пока не подтверждено. Обновите баланс позже."
                 }
             )
             maybeScheduleNextAd()
@@ -232,5 +246,22 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     fun logout() {
         store.clear()
         _state.value = ClientState()
+    }
+}
+
+// --- Вспомогательные функции вне класса ViewModel ---
+
+fun requestIgnoreBatteryOptimizations(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val packageName = context.packageName
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+                // Флаг необходим, так как вызов идет из ViewModel (Application Context)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
     }
 }
