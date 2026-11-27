@@ -24,9 +24,11 @@ Set these Gradle properties or environment variables when building:
 
 The MAX SDK key and rewarded ad-unit ID are intentionally not committed to source control. Configure them as GitHub Actions secrets for CI.
 
-## GitHub Actions signing
+## GitHub Actions release
 
-The workflow on branch `app` expects these repository secrets:
+Pushing to branch `background`, or manually starting **Android Release** from the Actions tab with `background` selected, builds a signed release APK and publishes it as a GitHub Release. The APK is also retained as a workflow artifact for 30 days.
+
+The workflow expects these repository secrets:
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
