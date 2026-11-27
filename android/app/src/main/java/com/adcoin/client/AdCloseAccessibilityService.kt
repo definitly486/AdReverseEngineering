@@ -106,15 +106,15 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
         for (root in roots) {
             // Слепые координатные тапы: не ищем текст, viewId или clickable-узлы.
-            // Не нажимаем в верхней полосе окна, где находятся его управляющие
-            // элементы (например, Google Play/gear и X). Точки размещаем ниже,
-            // внутри содержимого рекламного окна, слева и справа.
+            // Android показывает PiP-кнопки (шестерёнка, развернуть, X) поверх
+            // центральной части окна. Поэтому не отправляем жесты в эту полосу:
+            // обе точки располагаются ниже неё, в нижней части содержимого.
             val windowBounds = Rect().also(root::getBoundsInScreen)
             if (windowBounds.isEmpty || windowBounds.width() < 4 || windowBounds.height() < 4) {
                 Log.w(TAG, "skip invalid ad window bounds=$windowBounds")
                 continue
             }
-            val tapY = (windowBounds.top + windowBounds.height() * 0.50f).toInt()
+            val tapY = (windowBounds.top + windowBounds.height() * CONTENT_TAP_Y_PERCENT).toInt()
             val leftX = (windowBounds.left + windowBounds.width() * 0.20f).toInt()
             val rightX = (windowBounds.left + windowBounds.width() * 0.80f).toInt()
             val y = tapY.coerceIn(windowBounds.top + 1, windowBounds.bottom - 2)
@@ -124,12 +124,12 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 Rect(leftPoint, y, leftPoint + 1, y + 1),
                 Rect(rightPoint, y, rightPoint + 1, y + 1)
             )
-            Log.i(TAG, "blind content taps (window controls excluded) left=($leftPoint,$y) right=($rightPoint,$y) window=$windowBounds")
+            Log.i(TAG, "blind content taps below PiP controls left=($leftPoint,$y) right=($rightPoint,$y) window=$windowBounds")
 
             dispatchTapSequence(uniqueTargets, 0)
             prefs.edit()
                 .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(AdAutoCloser.KEY_LAST_RESULT, "corner taps excluding small-window X targets=${uniqueTargets.size}")
+                .putString(AdAutoCloser.KEY_LAST_RESULT, "content taps below PiP controls=${uniqueTargets.size}")
                 .apply()
             return
         }
@@ -626,6 +626,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val AGGRESSIVE_AFTER_MS = 8_000L
         private const val SMALL_WINDOW_MAX_SIZE = 1100
         private const val TAP_MARKER_VISIBLE_MS = 1400L
+        // Keep blind taps below the centered Android PiP controls row.
+        private const val CONTENT_TAP_Y_PERCENT = 0.78f
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
