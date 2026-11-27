@@ -164,13 +164,28 @@ class MaxRewardedController(
     }
 
     fun show(): Boolean {
-        if (rewardedAd.isReady) {
-            isShowing.set(true)
-            autoCloser?.startWatchingForClose() // Исправлено: было arm()
-            rewardedAd.showAd()
-            return true
+        if (!rewardedAd.isReady) {
+            Log.d("AdCoin.MaxRewarded", "Show requested while ad is not ready")
+            load()
+            return false
         }
-        return false
+
+        // Prevent duplicate showAd() calls while the previous impression is active.
+        if (!isShowing.compareAndSet(false, true)) {
+            Log.w("AdCoin.MaxRewarded", "Duplicate show request ignored: ad is already showing")
+            return false
+        }
+
+        return try {
+            autoCloser?.startWatchingForClose()
+            rewardedAd.showAd()
+            true
+        } catch (error: Exception) {
+            isShowing.set(false)
+            autoCloser?.stop()
+            Log.e("AdCoin.MaxRewarded", "Unable to show rewarded ad", error)
+            false
+        }
     }
 
     override fun onAdLoaded(ad: MaxAd) {
