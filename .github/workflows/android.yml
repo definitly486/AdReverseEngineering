@@ -14,12 +14,15 @@ concurrency:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/app'
     name: Build, sign and publish APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Checkout
+      - name: Checkout app branch
         uses: actions/checkout@v4
+        with:
+          ref: app
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -94,7 +97,7 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           name: AdCoin ${{ steps.release.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: app
           generate_release_notes: true
           files: dist/*.apk
           fail_on_unmatched_files: true
