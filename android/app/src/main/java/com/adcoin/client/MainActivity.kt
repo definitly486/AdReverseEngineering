@@ -499,7 +499,51 @@ private fun DashboardScreen(
             style = MaterialTheme.typography.bodyLarge
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            "Работа при выключении экрана",
+            style = MaterialTheme.typography.labelLarge
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (state.screenMode == BackgroundViewingService.SCREEN_MODE_DIM) {
+                Button(
+                    onClick = { vm.setScreenMode(BackgroundViewingService.SCREEN_MODE_DIM) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Тусклый экран") }
+            } else {
+                OutlinedButton(
+                    onClick = { vm.setScreenMode(BackgroundViewingService.SCREEN_MODE_DIM) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Тусклый экран") }
+            }
+
+            if (state.screenMode == BackgroundViewingService.SCREEN_MODE_OFF) {
+                Button(
+                    onClick = { vm.setScreenMode(BackgroundViewingService.SCREEN_MODE_OFF) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Экран гаснет") }
+            } else {
+                OutlinedButton(
+                    onClick = { vm.setScreenMode(BackgroundViewingService.SCREEN_MODE_OFF) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Экран гаснет") }
+            }
+        }
+        Text(
+            if (state.screenMode == BackgroundViewingService.SCREEN_MODE_DIM) {
+                "Дисплей остаётся включённым и затемняется; MAX может продолжать показ."
+            } else {
+                "Экран выключается обычным способом. Сервис удерживает CPU, но MAX может приостановить рекламу до разблокировки."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         if (!state.message.isNullOrEmpty()) {
             Text(
