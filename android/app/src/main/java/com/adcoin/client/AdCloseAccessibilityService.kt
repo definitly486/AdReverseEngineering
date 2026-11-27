@@ -226,8 +226,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         while (queue.isNotEmpty()) {
             val node = queue.removeFirst()
 
-            if (node.isVisibleToUser && node.isEnabled) {
-                val label = describe(node)
+if (node.isEnabled) {   // временно убрали isVisibleToUser
+    val label = describe(node)
                 val clickable = node.isClickable || hasClickableParent(node)
 
                 if (clickable) {
