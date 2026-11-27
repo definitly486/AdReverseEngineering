@@ -91,6 +91,28 @@ class LoginDialog(QDialog):
         except requests.RequestException as exc: QMessageBox.critical(self, "Ошибка входа", str(exc))
         finally: self.login_button.setEnabled(True)
 
+def find_user_id(value: Any, depth: int = 0) -> str | None:
+    """Find the AdCoin account ID in nested API response objects."""
+    if depth > 6 or value is None:
+        return None
+    keys = ("userId", "user_id", "uid", "accountId", "account_id", "id")
+    if isinstance(value, dict):
+        for key in keys:
+            candidate = value.get(key)
+            if isinstance(candidate, (str, int)) and str(candidate).strip():
+                return str(candidate).strip()
+        for child in value.values():
+            found = find_user_id(child, depth + 1)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = find_user_id(child, depth + 1)
+            if found:
+                return found
+    return None
+
+
 class BalanceWorker(QObject):
     finished, failed = Signal(dict), Signal(str)
     def __init__(self, session: dict):
@@ -98,13 +120,25 @@ class BalanceWorker(QObject):
     def run(self):
         try:
             token = self.session["access_token"]
-            result = {"updateData": api_request("POST", f"{API}/adcoin/updateData", token=token,
+            # Reuse the already saved access token. No email/code login is needed.
+            user_data = {}
+            try:
+                user_data = api_request("POST", f"{API}/adcoin/getUserData", token=token,
+                    body={"accessToken": token, "versionName": "Linux", "versionCode": 1,
+                          "androidSDK": 0, "lang": "en", "country": "",
+                          "messagingToken": None, "simCountryIso": None, "currencyCode": "USD"})
+            except requests.RequestException:
+                pass
+            result = {"userData": user_data}
+            result["userId"] = (find_user_id(user_data))
+            result["updateData"] = api_request("POST", f"{API}/adcoin/updateData", token=token,
                 body={"token": token, "deviceId": self.session.get("device_id", ""),
-                      "advertisingId": self.session.get("advertising_id", ""), "messagingToken": None})}
+                      "advertisingId": self.session.get("advertising_id", ""), "messagingToken": None})
             for key, url in (("fullStats", f"{API}/user/ownProfile/fullStats/get/{token}"),
                              ("withdrawal", f"{API}/withdrawal/methods/get/{token}")):
                 try: result[key] = api_request("GET", url, token=token)
                 except requests.RequestException as exc: result[key] = {"error": str(exc)}
+            result["userId"] = result.get("userId") or find_user_id(result.get("fullStats")) or find_user_id(result.get("updateData")) or find_user_id(result.get("withdrawal"))
             self.finished.emit(result)
         except Exception as exc: self.failed.emit(str(exc))
 
@@ -149,8 +183,9 @@ class MainWindow(QMainWindow):
         self.player.errorOccurred.connect(self.on_player_error)
         self.heading.setStyleSheet("font-size: 26px; font-weight: 700;")
         self.status = QLabel()
+        self.user_id_label = QLabel("AdCoin userId: —")
         self.balance, self.earnings, self.withdrawal = QLabel("Баланс: —"), QLabel("Заработано: —"), QLabel("Доступно к выводу: —")
-        for label in (self.balance, self.earnings, self.withdrawal):
+        for label in (self.user_id_label, self.balance, self.earnings, self.withdrawal):
             label.setStyleSheet("font-size: 18px; padding: 9px;")
         self.refresh_button, self.login_button, self.logout_button = QPushButton("Обновить данные"), QPushButton("Войти"), QPushButton("Выйти")
         self.refresh_button.clicked.connect(self.refresh); self.login_button.clicked.connect(self.login); self.logout_button.clicked.connect(self.logout)
@@ -167,7 +202,7 @@ class MainWindow(QMainWindow):
         video_actions.addWidget(self.volume)
         layout.addLayout(video_actions)
         layout.addWidget(self.status)
-        for widget in (self.balance, self.earnings, self.withdrawal): layout.addWidget(widget)
+        for widget in (self.user_id_label, self.balance, self.earnings, self.withdrawal): layout.addWidget(widget)
         layout.addStretch(); layout.addLayout(actions)
         root = QWidget(); root.setLayout(layout); self.setCentralWidget(root)
         self.apply_session()
@@ -245,6 +280,7 @@ class MainWindow(QMainWindow):
         try: STATE.unlink(missing_ok=True)
         except OSError as exc: QMessageBox.warning(self, "AdCoin", str(exc)); return
         self.session = {}; self.apply_session()
+        self.user_id_label.setText("AdCoin userId: —")
         self.balance.setText("Баланс: —"); self.earnings.setText("Заработано: —"); self.withdrawal.setText("Доступно к выводу: —")
 
     def refresh(self):
@@ -259,6 +295,7 @@ class MainWindow(QMainWindow):
 
     def show_data(self, data):
         update, stats, wd = data.get("updateData") or {}, data.get("fullStats") or {}, data.get("withdrawal") or {}
+        self.user_id_label.setText(f"AdCoin userId: {data.get('userId') or 'не найден'}")
         self.balance.setText(f"Баланс: {update.get('cash', '—')}")
         self.earnings.setText(f"Заработано: {stats.get('earnings', '—')}")
         self.withdrawal.setText(f"Доступно к выводу: {wd.get('balance', '—')}")
