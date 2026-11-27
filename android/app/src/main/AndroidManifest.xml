@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
+        android:name=".AdCoinApplication"
         android:allowBackup="false"
         android:label="AdReverse"
         android:supportsRtl="true"
@@ -25,6 +26,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- MAX fullscreen Activities: PiP разрешён именно для рекламного окна SDK. -->
+        <activity
+            android:name="com.applovin.adview.AppLovinFullscreenActivity"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true" />
+        <activity
+            android:name="com.applovin.adview.AppLovinFullscreenImmersiveActivity"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true" />
+
         <service
             android:name=".BackgroundViewingService"
             android:exported="false"
