@@ -17,11 +17,9 @@ import java.util.ArrayDeque
 /**
  * Opt-in helper. Armed only while a MAX ad is displayed.
  *
- * - Clicks Google Play / Install or Close (X)
- * - After Google Play → presses BACK
- * - After ~7 seconds → aggressive mode (even non-clickable top-right nodes)
- * - Supports multi-window / freeform / PiP
- * - Uses gesture click as the main reliable method
+ * - Normal node search on full-screen
+ * - On small windows: node search first, then blind clicks after ~5.5s
+ * - Blind clicks only affect small windows (area < 45% of screen)
  */
 class AdCloseAccessibilityService : AccessibilityService() {
 
@@ -86,7 +84,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
             return
         }
 
-        // Предпочитаем окна нашего приложения (особенно маленькие)
+        // Только окна нашего приложения
         val ourPackage = packageName
         val preferredRoots = allRoots
             .filter { root ->
@@ -97,7 +95,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
                 val r = Rect().also { root.getBoundsInScreen(it) }
                 r.width().toLong() * r.height()
             }
-            .ifEmpty { allRoots }
+
+        if (preferredRoots.isEmpty()) {
+            Log.v(TAG, "armed; no our-app roots")
+            return
+        }
 
         if (now - lastTreeDumpAt >= TREE_DUMP_INTERVAL_MS) {
             lastTreeDumpAt = now
@@ -106,31 +108,59 @@ class AdCloseAccessibilityService : AccessibilityService() {
             preferredRoots.take(2).forEach { dumpTree(it) }
         }
 
+        val screenArea = resources.displayMetrics.widthPixels.toLong() *
+                resources.displayMetrics.heightPixels
+
         for (root in preferredRoots) {
-            val result = findFirstTarget(root) ?: continue
-            val (node, isGooglePlay) = result
-            val rect = Rect().also(node::getBoundsInScreen)
-            val label = describe(node)
+            val rootRect = Rect().also { root.getBoundsInScreen(it) }
+            val rootArea = rootRect.width().toLong() * rootRect.height()
+            val isSmallWindow = rootArea < screenArea * SMALL_WINDOW_AREA_RATIO
 
-            val clicked = clickNodeOrParent(node)
-            Log.i(TAG, "clicked: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
-                    "label=$label bounds=$rect success=$clicked")
+            // === 1. Обычный поиск по нодам ===
+            val result = findFirstTarget(root)
+            if (result != null) {
+                val (node, isGooglePlay) = result
+                val rect = Rect().also(node::getBoundsInScreen)
+                val label = describe(node)
 
-            prefs.edit()
-                .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                .putString(
-                    AdAutoCloser.KEY_LAST_RESULT,
-                    "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked"
-                )
-                .apply()
+                val clicked = clickNodeOrParent(node)
+                Log.i(TAG, "clicked: type=${if (isGooglePlay) "GOOGLE_PLAY" else "CLOSE"} " +
+                        "label=$label bounds=$rect success=$clicked")
 
-            if (clicked) {
-                if (isGooglePlay) {
+                prefs.edit()
+                    .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
+                    .putString(
+                        AdAutoCloser.KEY_LAST_RESULT,
+                        "type=${if (isGooglePlay) "GP" else "X"} label=$label clicked=$clicked"
+                    )
+                    .apply()
+
+                if (clicked && isGooglePlay) {
                     mainHandler.postDelayed({
                         performGlobalAction(GLOBAL_ACTION_BACK)
                         Log.i(TAG, "pressed BACK after Google Play click")
                     }, 400)
                 }
+                return
+            }
+
+            // === 2. Слепой клик ТОЛЬКО для маленьких окон ===
+            if (isSmallWindow && (now - armedAt) > BLIND_CLICK_AFTER_MS) {
+                Log.w(TAG, "small window blind click, bounds=$rootRect areaRatio=${rootArea.toFloat() / screenArea}")
+
+                // Крестик — правый верхний угол
+                val closeX = rootRect.left + rootRect.width() * 0.90f
+                val closeY = rootRect.top + rootRect.height() * 0.12f
+                performBlindClick(closeX, closeY, "CLOSE_BLIND")
+
+                // Через 600 мс — зона кнопки Install / Google Play
+                mainHandler.postDelayed({
+                    val installX = rootRect.left + rootRect.width() * 0.50f
+                    val installY = rootRect.top + rootRect.height() * 0.82f
+                    performBlindClick(installX, installY, "INSTALL_BLIND")
+                }, 600)
+
+                prefs.edit().putLong(AdAutoCloser.KEY_LAST_CLICK, now).apply()
                 return
             }
         }
@@ -237,7 +267,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     }
                 }
 
-                // 4. Агрессивный режим — берём ДАЖЕ некликабельные маленькие ноды
+                // 4. Агрессивный режим — даже некликабельные маленькие ноды
                 if (aggressive) {
                     val nodeRect = Rect().also { node.getBoundsInScreen(it) }
                     val rootRect = Rect().also { root.getBoundsInScreen(it) }
@@ -365,7 +395,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
     }
 
     private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
-        // Пробуем обычный клик (на всякий случай)
         if (node.isClickable && node.isEnabled) {
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
@@ -379,7 +408,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
             parent = parent.parent
         }
 
-        // Главный способ — жест
         val rect = Rect()
         node.getBoundsInScreen(rect)
         if (rect.isEmpty) return false
@@ -404,6 +432,24 @@ class AdCloseAccessibilityService : AccessibilityService() {
         }, null)
     }
 
+    private fun performBlindClick(x: Float, y: Float, reason: String) {
+        Log.i(TAG, "blind click ($reason) at $x,$y")
+
+        val path = Path().apply { moveTo(x, y) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 70)
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+        dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                Log.i(TAG, "blind click ($reason) completed")
+            }
+
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                Log.w(TAG, "blind click ($reason) cancelled")
+            }
+        }, null)
+    }
+
     override fun onInterrupt() = Unit
 
     companion object {
@@ -412,6 +458,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val TREE_DUMP_INTERVAL_MS = 2500L
         private const val MAX_DIAGNOSTIC_NODES = 50
         private const val AGGRESSIVE_AFTER_MS = 6_500L
+        private const val BLIND_CLICK_AFTER_MS = 5_500L
+        private const val SMALL_WINDOW_AREA_RATIO = 0.45f
         private const val KEY_ARMED_AT = "armed_at"
 
         private val GOOGLE_PLAY_WORDS = listOf(
