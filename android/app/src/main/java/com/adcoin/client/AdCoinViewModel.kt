@@ -42,7 +42,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         ClientState(
             tokenPresent = !store.token().isNullOrBlank(),
             userId = store.userId(),
-            infiniteMode = backgroundPrefs.getBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false)
+            infiniteMode = backgroundPrefs.getBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false),
+            videosCompleted = backgroundPrefs.getInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, 0)
         )
     )
     val state: StateFlow<ClientState> = _state.asStateFlow()
@@ -132,7 +133,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             _state.value = _state.value.copy(message = "Нет userId — бесконечный режим недоступен.")
             return
         }
-        backgroundPrefs.edit().putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, true).apply()
+        backgroundPrefs.edit()
+            .putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, true)
+            .putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, 0)
+            .apply()
         BackgroundViewingService.start(getApplication())
         _state.value = _state.value.copy(
             infiniteMode = true,
@@ -245,7 +249,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun logout() {
-        backgroundPrefs.edit().putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false).apply()
+        backgroundPrefs.edit()
+            .putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false)
+            .putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, 0)
+            .apply()
         BackgroundViewingService.stop(getApplication())
         store.clear()
         _state.value = ClientState()
