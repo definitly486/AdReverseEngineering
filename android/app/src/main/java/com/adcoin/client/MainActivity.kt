@@ -259,7 +259,7 @@ class MainActivity : ComponentActivity() {
                 val command = """
                     settings put global enable_freeform_support 1
                     settings put global force_resizable_activities 1
-                    am start --windowingMode 5 --activity-new-task -n com.pavloffmedev.dcn/com.adcoin.client.StatsActivity
+                    am start --windowingMode 5 -f 0x10000000 -n com.pavloffmedev.dcn/com.adcoin.client.StatsActivity
                 """.trimIndent()
                 val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
                 val output = process.inputStream.bufferedReader().use { it.readText() }
