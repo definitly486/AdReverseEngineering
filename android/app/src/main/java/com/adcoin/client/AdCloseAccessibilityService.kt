@@ -149,9 +149,10 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private fun collectOurSmallWindows(): List<AccessibilityNodeInfo> {
         return collectOurRoots()
             .filter { isSmall(it) }
-            .sortedBy {
-                val r = Rect().also { it.getBoundsInScreen(r) }
-                r.width().toLong() * r.height()
+            .sortedBy { root ->
+                val bounds = Rect()
+                root.getBoundsInScreen(bounds)
+                bounds.width().toLong() * bounds.height()
             }
     }
 
