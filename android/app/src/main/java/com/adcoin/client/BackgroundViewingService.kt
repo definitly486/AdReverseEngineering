@@ -67,33 +67,24 @@ class BackgroundViewingService : Service() {
     }
 
     /**
-     * DIM keeps the display awake at Android's dim brightness.
-     * SCREEN_OFF allows the normal display timeout or power button to turn the
-     * panel off while a partial wake lock keeps the session process runnable.
-     * MAX ad playback still requires its Activity and may pause until unlock.
+     * Keep CPU work alive in either mode. Display brightness and screen timeout
+     * are controlled on the currently resumed Activity windows by ScreenPowerController.
      */
-    @Suppress("DEPRECATION")
     private fun applyScreenPowerMode() {
         releaseModeWakeLock()
         val powerManager = getSystemService(PowerManager::class.java)
         val mode = sessionPrefs().getString(KEY_SCREEN_MODE, SCREEN_MODE_DIM)
-        val wakeLock = when (mode) {
-            SCREEN_MODE_OFF -> powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "${packageName}:FreeformScreenOff"
-            )
-            else -> powerManager.newWakeLock(
-                PowerManager.SCREEN_DIM_WAKE_LOCK,
-                "${packageName}:FreeformDimScreen"
-            )
-        }
+        val wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "${packageName}:FreeformSession"
+        )
         try {
             wakeLock.setReferenceCounted(false)
             wakeLock.acquire()
             modeWakeLock = wakeLock
-            Log.i(TAG, "Screen power mode applied: ${mode ?: SCREEN_MODE_DIM}")
+            Log.i(TAG, "CPU wake lock acquired; display mode is ${mode ?: SCREEN_MODE_DIM}")
         } catch (error: Exception) {
-            Log.e(TAG, "Could not acquire mode wake lock", error)
+            Log.e(TAG, "Could not acquire session wake lock", error)
             runCatching { if (wakeLock.isHeld) wakeLock.release() }
         }
     }
