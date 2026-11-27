@@ -26,17 +26,19 @@ class AdAutoCloser(
 
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(a: Activity) {
-            if (a !is MainActivity && prefs.getBoolean(KEY_ACTIVE, false)) {
-                val expectedPackage = adPackageName
-                if (expectedPackage == null || a.packageName == expectedPackage) {
-                    if (adPackageName == null) {
-                        adPackageName = a.packageName
-                        prefs.edit().putString(KEY_AD_PACKAGE, adPackageName).apply()
+            if (a !is MainActivity) {
+                adActivity = a
+                if (prefs.getBoolean(KEY_ACTIVE, false)) {
+                    val expectedPackage = adPackageName
+                    if (expectedPackage == null || a.packageName == expectedPackage) {
+                        if (adPackageName == null) {
+                            adPackageName = a.packageName
+                            prefs.edit().putString(KEY_AD_PACKAGE, adPackageName).apply()
+                        }
+                        Log.i(TAG, "ad Activity observed: ${a.javaClass.name} package=${a.packageName}")
+                    } else {
+                        Log.i(TAG, "ignored Activity package=${a.packageName}; expected=$expectedPackage")
                     }
-                    adActivity = a
-                    Log.i(TAG, "ad Activity observed: ${a.javaClass.name} package=${a.packageName}")
-                } else {
-                    Log.i(TAG, "ignored Activity package=${a.packageName}; expected=$expectedPackage")
                 }
             }
         }
