@@ -2,8 +2,6 @@ package com.adcoin.client
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -22,7 +20,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     private var lastTreeDumpAt = 0L
     private var armedAt = 0L
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -164,10 +161,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     // Фиксируем её, но никогда не нажимаем: ищем X / Close на этом экране.
                     if (GOOGLE_PLAY_WORDS.any { label.contains(it) }) {
                         Log.i(TAG, "detected Google Play/install CTA; searching for close control: $label")
-                        if (node is android.view.accessibility.AccessibilityNodeInfo) {
-                            // Не выбираем саму CTA и не поднимаемся к её кликабельному родителю.
-                            // Дочерние узлы оставляем для обхода ниже.
-                        }
+                        // Саму CTA пропускаем; обход дерева продолжится с её дочерних узлов.
                         continue
                     }
 
