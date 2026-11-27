@@ -21,13 +21,12 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 private data class ServerStatsSnapshot(
-    val progress: Int,
-    val target: Int
+    val videosCompleted: Int
 )
 
 class StatsActivity : ComponentActivity() {
     private val statsPrefs by lazy {
-        getSharedPreferences("adreverse_server_stats", MODE_PRIVATE)
+        getSharedPreferences(BackgroundViewingService.PREFS_NAME, MODE_PRIVATE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,26 +62,21 @@ class StatsActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(1.dp)
                     ) {
                         Text(
-                            text = "ADCOIN · СЕРВЕР",
+                            text = "ADCOIN · ПРОСМОТРЫ",
                             fontSize = 9.sp,
                             color = Color(0xFFB8C5D8),
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = if (stats.progress >= 0) stats.progress.toString() else "—",
+                            text = stats.videosCompleted.toString(),
                             fontSize = 30.sp,
                             lineHeight = 32.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "засчитано сегодня",
+                            text = "просмотрено роликов",
                             fontSize = 10.sp,
                             color = Color(0xFFD5DCE7)
-                        )
-                        Text(
-                            text = if (stats.target >= 0) "Цель: ${stats.target}" else "Цель: —",
-                            fontSize = 10.sp,
-                            color = Color(0xFFB8C5D8)
                         )
                     }
                 }
@@ -91,7 +85,9 @@ class StatsActivity : ComponentActivity() {
     }
 
     private fun readStats() = ServerStatsSnapshot(
-        progress = statsPrefs.getInt("daily_progress", -1),
-        target = statsPrefs.getInt("daily_target", -1)
+        videosCompleted = statsPrefs.getInt(
+            BackgroundViewingService.KEY_VIDEOS_COMPLETED,
+            0
+        )
     )
 }
