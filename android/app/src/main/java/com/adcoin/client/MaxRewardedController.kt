@@ -72,7 +72,7 @@ class MaxRewardedController(
                 val children = try {
                     current.listFiles()
                 } catch (error: SecurityException) {
-                    Log.d(TAG, "Skip unreadable directory: ${current.name}")
+                    Log.d(LOG_TAG, "Skip unreadable directory: ${current.name}")
                     null
                 }
                 children?.forEach { child ->
@@ -88,7 +88,7 @@ class MaxRewardedController(
             val name = current.name.lowercase()
             if (name.endsWith(".m3u8") || name.endsWith(".mpd")) {
                 streamManifests++
-                Log.d(TAG, "Found cached stream manifest (not necessarily playable): ${current.absolutePath}")
+                Log.d(LOG_TAG, "Found cached stream manifest (not necessarily playable): ${current.absolutePath}")
                 continue
             }
 
@@ -103,7 +103,7 @@ class MaxRewardedController(
         }
 
         Log.i(
-            TAG,
+            LOG_TAG,
             "Media scan: inspected=$inspected videoCandidates=$videoCandidates " +
                 "streamManifests=$streamManifests selected=${latest?.absolutePath ?: "none"}"
         )
@@ -150,12 +150,13 @@ class MaxRewardedController(
                     (knownVideoExtension && file.length() >= MIN_VIDEO_BYTES)
             }
         } catch (error: Exception) {
-            Log.d(TAG, "Cannot inspect media candidate ${file.name}: ${error.message}")
+            Log.d(LOG_TAG, "Cannot inspect media candidate ${file.name}: ${error.message}")
             false
         }
     }
 
     private companion object {
+        const val LOG_TAG = "AdCoin.MaxRewarded.MediaScan"
         const val MAX_SCAN_ENTRIES = 2500
         const val MAX_SCAN_DEPTH = 10
         const val MIN_VIDEO_BYTES = 32L * 1024L
