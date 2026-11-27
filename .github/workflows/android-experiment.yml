@@ -1,8 +1,6 @@
 name: Android Experiment Build
 
 on:
-  push:
-    branches: [experiment/pip-rewarded-video]
   workflow_dispatch:
 
 permissions:
