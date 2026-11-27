@@ -1,10 +1,12 @@
 package com.adcoin.client
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
-import android.content.Intent
-import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,13 +52,21 @@ class MainActivity : ComponentActivity() {
 private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
+    
+    // Запрос разрешения на уведомления для Android 13+ (требуется для Foreground Service)
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+    
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val activity = context as? android.app.Activity
     val controller = remember(activity, state.userId) {
         if (activity != null && !state.userId.isNullOrBlank()) {
-            val closer = AdAutoCloser(
-                activity.application,
-                onLog = { vm.setMessage("Автозакрытие: $it") }
-            )
             MaxRewardedController(
                 activity = activity,
                 userId = state.userId!!,
@@ -64,14 +74,15 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
                 onRewarded = vm::onRewarded,
                 onAdLoadedCallback = vm::onMaxAdLoaded,
                 onAdHiddenCallback = vm::onMaxAdHidden,
-                onAdDisplayedCallback = vm::onMaxAdDisplayed,
-                autoCloser = closer
+                onAdDisplayedCallback = vm::onMaxAdDisplayed
             )
         } else null
     }
+    
     LaunchedEffect(controller) {
         controller?.initializeAndLoad()
     }
+    
     LaunchedEffect(state.autoShowNext, state.infiniteMode) {
         if (state.autoShowNext && state.infiniteMode) {
             vm.consumeAutoShowRequest()
@@ -90,7 +101,7 @@ private fun AdCoinApp(vm: AdCoinViewModel = viewModel()) {
             if (!state.tokenPresent) {
                 LoginScreen(state, vm)
             } else {
-                DashboardScreen(state, vm, onWatchAd = { controller?.show() })
+                DashboardScreen(state, vm, context, onWatchAd = { controller?.show() })
             }
         }
     }
@@ -144,13 +155,20 @@ private fun LoginScreen(state: ClientState, vm: AdCoinViewModel) {
 }
 
 @Composable
-private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: () -> Unit) {
-    val context = LocalContext.current
+private fun DashboardScreen(
+    state: ClientState, 
+    vm: AdCoinViewModel, 
+    context: android.content.Context, // Добавлен контекст
+    onWatchAd: () -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("AdCoin", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("AdCoin", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = vm::logout) { Text("Выйти") }
+        }
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
                 Text("Баланс", color = Color.LightGray)
@@ -178,7 +196,7 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                 Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "Следующий ролик запускается автоматически после штатного закрытия текущей рекламы " +
-                        "и подтверждения награды сервером. Первый запуск требует нажатия; остановить цикл можно кнопкой «Стоп».",
+                        "и подтверждения награды сервером.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.LightGray
                 )
@@ -190,8 +208,6 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     )
                 }
 
-                // The first impression is explicitly started by the user. Later impressions
-                // require MAX hidden + server-confirmed reward + a preloaded next ad.
                 if (!state.infiniteMode || state.videosCompleted == 0) {
                     Button(
                         onClick = onWatchAd,
@@ -208,31 +224,19 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     )
                 }
 
-                OutlinedButton(
-                    onClick = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Настроить автозакрытие (Специальные возможности)")
-                }
-                Text(
-                    "Включите службу в настройках Android. Она ищет кнопку закрытия только после сигнала о награде MAX.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.LightGray
-                )
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (!state.infiniteMode) {
                         OutlinedButton(
-                            onClick = vm::startInfiniteMode,
+                            onClick = { vm.startInfiniteMode(context) }, // Передаем context
                             enabled = !state.userId.isNullOrBlank() && !state.checkingReward && !state.rewardInFlight,
                             modifier = Modifier.weight(1f)
                         ) { Text("Бесконечный просмотр") }
                     } else {
                         OutlinedButton(
-                            onClick = vm::stopInfiniteMode,
+                            onClick = { vm.stopInfiniteMode(context) }, // Передаем context
                             modifier = Modifier.weight(1f)
                         ) { Text("Стоп") }
                     }
@@ -252,12 +256,5 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
             if (state.loading) CircularProgressIndicator()
         }
         state.message?.let { Text(it, color = Color(0xFF9DDCB1)) }
-
-        // Keep account logout away from the upper-right corner, where ad close controls appear.
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(
-            onClick = vm::logout,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Выйти из аккаунта") }
     }
 }
