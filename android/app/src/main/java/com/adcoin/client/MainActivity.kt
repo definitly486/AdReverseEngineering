@@ -32,10 +32,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 1. Простая и корректная инициализация AppLovin SDK (ключ берется из AndroidManifest.xml)
-        AppLovinSdk.getInstance(this).initializeSdk { configuration ->
-            Log.i("AdCoin", "✅ AppLovin SDK успешно инициализирован")
-        }
+        // 1. Минималистичная инициализация AppLovin SDK (ключ автоматически берется из AndroidManifest.xml)
+        AppLovinSdk.getInstance(this).initializeSdk()
 
         val closer = AdAutoCloser(application)
         
