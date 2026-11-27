@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.content.pm.PackageManager
 import android.util.Rational
 import android.util.Log
 import android.widget.Toast
@@ -72,8 +73,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val activityManager = getSystemService(android.app.ActivityManager::class.java)
-        if (activityManager?.isPictureInPictureSupported != true) {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             Toast.makeText(
                 this,
                 "Android сообщает, что режим PiP не поддерживается или отключён на этом устройстве",
