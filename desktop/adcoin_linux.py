@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native Linux desktop client for AdCoin."""
 from __future__ import annotations
-import json, sys, uuid
+import json, sys, uuid, logging, traceback
 from pathlib import Path
 from typing import Any
 import requests
@@ -16,6 +16,51 @@ API = "https://api.adcoinapp.com"
 API6 = "https://adcoinapi.su"
 STATE = Path.home() / ".config" / "adcoin" / "session.json"
 USER_AGENT = "ktor-client"
+
+LOG_FILE = STATE.parent / "adcoin-debug.log"
+logger = logging.getLogger("adcoin")
+logger.setLevel(logging.DEBUG)
+logger.propagate = False
+if not logger.handlers:
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s [%(threadName)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+    except OSError:
+        pass
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+def response_shape(value: Any, depth: int = 0) -> str:
+    """Describe JSON structure without writing account data or tokens to logs."""
+    if depth >= 3:
+        return type(value).__name__
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            if isinstance(item, dict):
+                desc = "{" + ", ".join(item.keys()) + "}"
+            elif isinstance(item, list):
+                desc = f"list[{len(item)}]"
+            else:
+                desc = type(item).__name__
+            parts.append(f"{key}:{desc}")
+        return "{" + ", ".join(parts) + "}"
+    if isinstance(value, list):
+        return f"list[{len(value)}]"
+    return type(value).__name__
+
+def safe_url(url: str, token: str = "") -> str:
+    if token:
+        url = url.replace(token, "<TOKEN>")
+    return url
+
 
 def build_session(access_token: str | None = None) -> requests.Session:
     session = requests.Session()
@@ -44,21 +89,38 @@ def load_session() -> dict[str, Any]:
 
 def request_json(session: requests.Session, method: str, url: str,
                  *, json_body: dict[str, Any] | None = None) -> Any:
-    response = session.request(method, url, json=json_body, timeout=(15, 45))
+    safe = safe_url(url)
+    logger.debug("HTTP -> %s %s body_fields=%s",
+                 method, safe, list(json_body.keys()) if isinstance(json_body, dict) else [])
+    try:
+        response = session.request(method, url, json=json_body, timeout=(15, 45))
+    except Exception:
+        logger.exception("HTTP request failed before receiving a response: %s %s", method, safe)
+        raise
+    logger.debug("HTTP <- %s %s status=%s bytes=%s content_type=%s",
+                 method, safe, response.status_code, len(response.content),
+                 response.headers.get("Content-Type", ""))
     if not response.ok:
         try:
-            details = json.dumps(response.json(), ensure_ascii=False, indent=2)
+            payload = response.json()
+            details = json.dumps(payload, ensure_ascii=False, indent=2)
+            logger.error("HTTP error response structure: %s", response_shape(payload))
         except ValueError:
             details = response.text[:2000]
+            logger.error("HTTP error response is non-JSON: %s", details[:500])
         raise requests.HTTPError(
-            f"HTTP {response.status_code} {method} {url}: {details}",
+            f"HTTP {response.status_code} {method} {safe}: {details}",
             response=response,
         )
     if not response.content:
+        logger.debug("HTTP response has an empty body")
         return None
     try:
-        return response.json()
+        result = response.json()
+        logger.debug("HTTP JSON response shape: %s", response_shape(result))
+        return result
     except ValueError:
+        logger.warning("HTTP response is not JSON; first bytes: %r", response.text[:200])
         return {"_raw": response.text[:4000]}
 
 def api_request(method: str, url: str, *, body: dict | None = None,
@@ -86,6 +148,7 @@ class LoginDialog(QDialog):
         buttons.addWidget(self.send_button); buttons.addWidget(self.login_button)
         layout = QVBoxLayout(self); layout.addLayout(form); layout.addLayout(buttons)
         self.device_id, self.advertising_id = str(uuid.uuid4()), str(uuid.uuid4())
+        logger.debug("Login dialog initialized")
 
     def send_code(self):
         email = self.email.text().strip()
@@ -93,13 +156,17 @@ class LoginDialog(QDialog):
             QMessageBox.warning(self, "Проверка", "Введите корректный адрес электронной почты."); return
         self.send_button.setEnabled(False)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        logger.info("Login: requesting email verification code")
         try:
             result = api_request("POST", f"{API}/login/sendCode", body={"email": email})
+            logger.debug("sendCode response shape: %s", response_shape(result))
             if isinstance(result, dict) and result.get("status") is True:
                 self.code.setEnabled(True); self.login_button.setEnabled(True)
                 QMessageBox.information(self, "AdCoin", "Код отправлен на вашу почту.")
             else: QMessageBox.warning(self, "AdCoin", f"Неожиданный ответ сервера:\n{result}")
-        except requests.RequestException as exc: QMessageBox.critical(self, "Ошибка сети", str(exc))
+        except Exception as exc:
+            logger.exception("sendCode failed")
+            QMessageBox.critical(self, "Ошибка сети", str(exc))
         finally:
             QApplication.restoreOverrideCursor(); self.send_button.setEnabled(True)
 
@@ -108,12 +175,15 @@ class LoginDialog(QDialog):
         if not code:
             QMessageBox.warning(self, "Проверка", "Введите код из письма."); return
         self.login_button.setEnabled(False)
+        logger.info("Login: validating email code")
         try:
             result = api_request("POST", f"{API}/login/validateCode", body={
                 "email": email, "code": code, "referrer": "",
                 "deviceId": self.device_id, "advertisingId": self.advertising_id})
+            logger.debug("validateCode response shape: %s", response_shape(result))
             token = (result.get("accessToken") or result.get("access_token")) if isinstance(result, dict) else None
             if not token:
+                logger.error("validateCode succeeded at HTTP level but accessToken is missing")
                 QMessageBox.warning(self, "Вход не выполнен", f"Сервер не вернул accessToken:\n{result}"); return
             from datetime import datetime, timezone
             save_session({
@@ -130,8 +200,11 @@ class LoginDialog(QDialog):
                 "api6_base": API6,
                 "api_base": API,
             })
+            logger.info("Login successful; session saved (token omitted)")
             self.accept()
-        except requests.RequestException as exc: QMessageBox.critical(self, "Ошибка входа", str(exc))
+        except Exception as exc:
+            logger.exception("validateCode/login failed")
+            QMessageBox.critical(self, "Ошибка входа", str(exc))
         finally: self.login_button.setEnabled(True)
 
 def find_user_id(value: Any, depth: int = 0) -> str | None:
@@ -165,16 +238,22 @@ class BalanceWorker(QObject):
 
     def run(self):
         try:
+            logger.info("Balance refresh started")
+            logger.debug("Session fields=%s api_base=%s", list(self.session.keys()),
+                         self.session.get("api_base", API))
             token = self.session.get("access_token") or (
                 self.session.get("raw_response") or {}).get("accessToken")
             if not token:
+                logger.error("Session has no access_token or raw_response.accessToken")
                 raise RuntimeError("В сохранённой сессии отсутствует accessToken.")
+            logger.debug("Saved access token found (value hidden, length=%d)", len(token))
 
             api = (self.session.get("api_base") or API).rstrip("/")
             client = build_session(token)
             results: dict[str, Any] = {}
 
             # Профиль и userId из основного API.
+            logger.info("Step 1/4: requesting getUserData")
             results["userData"] = request_json(client, "POST",
                 f"{api}/adcoin/getUserData", json_body={
                     "accessToken": token,
@@ -188,9 +267,11 @@ class BalanceWorker(QObject):
                     "currencyCode": "USD",
                 })
 
+            logger.info("getUserData completed; response=%s", response_shape(results["userData"]))
             # Эти запросы перенесены из рабочего cmd_balance без смены API.
             device_id = self.session.get("device_id") or str(uuid.uuid4())
             advertising_id = self.session.get("advertising_id") or str(uuid.uuid4())
+            logger.info("Step 2/4: requesting updateData")
             results["updateData"] = request_json(client, "POST",
                 f"{api}/adcoin/updateData", json_body={
                     "token": token,
@@ -199,13 +280,19 @@ class BalanceWorker(QObject):
                     "messagingToken": None,
                 })
 
+            logger.info("updateData completed; response=%s", response_shape(results["updateData"]))
+            logger.info("Step 3/4: requesting fullStats")
+            encoded_token = requests.utils.quote(token, safe="")
             results["fullStats"] = request_json(client, "GET",
-                f"{api}/user/ownProfile/fullStats/get/{token}")
+                f"{api}/user/ownProfile/fullStats/get/{encoded_token}")
 
+            logger.info("fullStats completed; response=%s", response_shape(results["fullStats"]))
+            logger.info("Step 4/4: requesting withdrawal methods")
             try:
                 results["withdrawalMethods"] = request_json(client, "GET",
                     f"{api}/withdrawal/methods/get/{token}")
-            except Exception:
+            except Exception as exc:
+                logger.warning("withdrawal GET failed (%s); trying POST fallback", exc)
                 results["withdrawalMethods"] = request_json(client, "POST",
                     f"{api}/withdrawal/methods/get/", json_body={"token": token})
 
@@ -215,9 +302,14 @@ class BalanceWorker(QObject):
             results["userId"] = (str(results["user"]["userId"])
                 if results["user"].get("userId") is not None else None)
             results["withdrawal"] = results.get("withdrawalMethods") or {}
+            logger.info("Account data loaded: userId_present=%s updateData=%s fullStats=%s withdrawal=%s",
+                        bool(results["userId"]), response_shape(results.get("updateData")),
+                        response_shape(results.get("fullStats")),
+                        response_shape(results.get("withdrawalMethods")))
             self.finished.emit(results)
         except Exception as exc:
-            self.failed.emit(str(exc))
+            logger.exception("Balance refresh failed at API/data processing stage")
+            self.failed.emit(f"{type(exc).__name__}: {exc}\nПодробности: {LOG_FILE}")
 
 
 class MainWindow(QMainWindow):
@@ -283,6 +375,8 @@ class MainWindow(QMainWindow):
         for widget in (self.user_id_label, self.balance, self.earnings, self.withdrawal): layout.addWidget(widget)
         layout.addStretch(); layout.addLayout(actions)
         root = QWidget(); root.setLayout(layout); self.setCentralWidget(root)
+        logger.info("AdCoin Linux client starting; session_file_exists=%s log_file=%s",
+                    STATE.is_file(), LOG_FILE)
         self.apply_session()
         if self.session.get("access_token") or (self.session.get("raw_response") or {}).get("accessToken"): self.refresh()
 
@@ -373,6 +467,7 @@ class MainWindow(QMainWindow):
         self.thread.finished.connect(lambda: self.refresh_button.setEnabled(True)); self.thread.start()
 
     def show_data(self, data):
+        logger.info("UI received account data; fields=%s", list(data.keys()))
         update = data.get("updateData") or {}
         stats = data.get("fullStats") or {}
         wd = data.get("withdrawalMethods") or {}
@@ -384,6 +479,7 @@ class MainWindow(QMainWindow):
         self.status.setText(f"Аккаунт AdCoin подключён: {user.get('email') or self.session.get('email', '')}")
 
     def show_error(self, message):
+        logger.error("UI reports account refresh error: %s", message)
         self.status.setText("Не удалось обновить данные"); QMessageBox.warning(self, "Ошибка AdCoin", message)
 
 def main():
