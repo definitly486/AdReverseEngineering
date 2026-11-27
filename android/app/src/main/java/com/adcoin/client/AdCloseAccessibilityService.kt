@@ -115,7 +115,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     "roots=${roots.size} heuristicOnlyAfterMs=${AGGRESSIVE_AFTER_MS}"
             )
             roots.values.forEach { (root, source) -> dumpTree(root, source) }
-            Log.i(TAG, "DIAG_END roots=${roots.size}; CTA and heuristic candidates are diagnostic-only")
+            Log.i(TAG, "DIAG_END roots=${roots.size}; CTA is diagnostic-only; close heuristics may click")
         }
 
         // Scan on every accessibility event; only tree logging is throttled.
@@ -156,8 +156,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Returns true only after an explicitly labelled close control was clicked.
-     * Visual/top-right heuristics are deliberately diagnostic-only.
+     * Returns true after an explicit close label or the restored graphic/top-right
+     * close heuristics successfully activate a candidate.
      */
     private fun inspectAndMaybeClick(
         root: AccessibilityNodeInfo,
@@ -190,64 +190,30 @@ class AdCloseAccessibilityService : AccessibilityService() {
             if (explicitClose && node.isVisibleToUser && node.isEnabled && !bounds.isEmpty) {
                 val clickTarget = clickableTarget(node)
                 if (clickTarget != null && !isGooglePlayCta(describe(clickTarget))) {
-                    val targetBounds = Rect().also(clickTarget::getBoundsInScreen)
-                    Log.i(
-                        TAG,
-                        "CLOSE_CANDIDATE source=$source label=$label " +
-                            "target=${describe(clickTarget)} bounds=$targetBounds"
-                    )
-
-                    val prefs = getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
-                    if (!prefs.getBoolean(KEY_CLOSE_CLICKED, false)) {
-                        val clicked = runCatching {
-                            clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        }.onFailure {
-                            Log.w(TAG, "close click action failed source=$source", it)
-                        }.getOrDefault(false)
-
-                        if (clicked) {
-                            prefs.edit()
-                                .putBoolean(KEY_CLOSE_CLICKED, true)
-                                .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
-                                .putString(
-                                    AdAutoCloser.KEY_LAST_RESULT,
-                                    "explicit close control clicked at $targetBounds"
-                                )
-                                .apply()
-                            Log.i(TAG, "CLOSE_CLICK_SENT source=$source bounds=$targetBounds")
-                            return true
-                        } else {
-                            Log.i(TAG, "CLOSE_CLICK_REJECTED source=$source bounds=$targetBounds")
-                        }
-                    } else {
-                        Log.v(TAG, "close control already clicked for this ad show")
-                    }
+                    Log.i(TAG, "CLOSE_CANDIDATE source=$source label=$label " +
+                        "target=${describe(clickTarget)} bounds=${Rect().also(clickTarget::getBoundsInScreen)}")
+                    if (clickCloseTarget(clickTarget, source, now, "explicit-label")) return true
                 }
             }
 
-            // The uploaded detector's image-child + top-right geometry is kept,
-            // but it is only a visual hint: it is never clicked automatically.
+            // Restore the original working graphic-X heuristic: a small Image
+            // child inside a clickable parent in the ad's top-right corner.
             if (node.isClickable && node.isEnabled && node.isVisibleToUser &&
-                hasCloseImageChild(node) && matchesTopRightCloseShape(node, rootRect)
+                hasCloseImageChild(node) && matchesTopRightCloseShape(node, rootRect) &&
+                !isGooglePlayCta(label)
             ) {
-                Log.i(
-                    TAG,
-                    "CLOSE_SHAPE_CANDIDATE action=none source=$source " +
-                        "label=$label bounds=$bounds"
-                )
+                Log.i(TAG, "CLOSE_SHAPE_CANDIDATE source=$source label=$label bounds=$bounds")
+                if (clickCloseTarget(node, source, now, "image-child-top-right")) return true
             }
 
-            // Keep the 12-second fallback search as diagnostics only. It must
-            // not tap an arbitrary top-right control (which may be an ad CTA).
+            // Restore the original 12-second top-right fallback. It is restricted
+            // to a small clickable node in the ad window and excludes CTA labels.
             if (aggressiveDiagnostics && node.isClickable && node.isEnabled &&
                 node.isVisibleToUser && isSmallTopRight(bounds, rootRect) &&
-                !isCta
+                !isGooglePlayCta(label)
             ) {
-                Log.i(
-                    TAG,
-                    "TOP_RIGHT_FALLBACK_CANDIDATE action=none source=$source " +
-                        "label=$label bounds=$bounds"
-                )
+                Log.i(TAG, "TOP_RIGHT_FALLBACK_CANDIDATE source=$source label=$label bounds=$bounds")
+                if (clickCloseTarget(node, source, now, "12s-top-right-fallback")) return true
             }
 
             for (i in 0 until node.childCount) {
@@ -262,6 +228,48 @@ class AdCloseAccessibilityService : AccessibilityService() {
         if (queue.isNotEmpty()) {
             Log.w(TAG, "NODE_SCAN_TRUNCATED source=$source visited=$visited")
         }
+        return false
+    }
+
+    private fun clickCloseTarget(
+        target: AccessibilityNodeInfo,
+        source: String,
+        now: Long,
+        method: String
+    ): Boolean {
+        val prefs = getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_CLOSE_CLICKED, false)) {
+            Log.v(TAG, "close control already clicked for this ad show")
+            return false
+        }
+
+        val bounds = Rect().also(target::getBoundsInScreen)
+        val label = describe(target)
+        if (isGooglePlayCta(label)) {
+            Log.w(TAG, "CLICK_BLOCKED_CTA source=$source method=$method label=$label bounds=$bounds")
+            return false
+        }
+
+        val clicked = runCatching {
+            target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }.onFailure {
+            Log.w(TAG, "close click action failed source=$source method=$method", it)
+        }.getOrDefault(false)
+
+        if (clicked) {
+            prefs.edit()
+                .putBoolean(KEY_CLOSE_CLICKED, true)
+                .putLong(AdAutoCloser.KEY_LAST_CLICK, now)
+                .putString(
+                    AdAutoCloser.KEY_LAST_RESULT,
+                    "$method close candidate clicked at $bounds"
+                )
+                .apply()
+            Log.i(TAG, "CLOSE_CLICK_SENT source=$source method=$method bounds=$bounds")
+            return true
+        }
+
+        Log.i(TAG, "CLOSE_CLICK_REJECTED source=$source method=$method bounds=$bounds")
         return false
     }
 
