@@ -23,6 +23,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
     private var lastWindowDumpAt = 0L
     private var lastGpStatusAt = 0L
     private var GP: Rect? = null
+    private var gpNode: AccessibilityNodeInfo? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
@@ -89,9 +90,6 @@ class AdCloseAccessibilityService : AccessibilityService() {
             val closeX = rootRect.left + rootRect.width() * 0.90f
             val closeY = rootRect.top + rootRect.height() * 0.10f
             gestureClick(closeX, closeY, "X")
-
-            // Не выполняем слепой клик по рекламному CTA: координаты без
-            // подтверждённого элемента могут привести к нажатию не той кнопки.
         }
     }
 
@@ -108,6 +106,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         prefs.edit().putLong(AdAutoCloser.KEY_LAST_CLICK, now).apply()
 
         if (isGp) {
+            // Кнопка Google Play нажата — возвращаемся назад после открытия магазина
             mainHandler.postDelayed({ performGlobalAction(GLOBAL_ACTION_BACK) }, 400)
         }
     }
@@ -159,6 +158,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     private fun findFirstTarget(root: AccessibilityNodeInfo): Pair<AccessibilityNodeInfo, Boolean>? {
         GP = null
+        gpNode = null
         val q = ArrayDeque<AccessibilityNodeInfo>()
         q.add(root)
         val aggressive = SystemClock.elapsedRealtime() - armedAt > 6000
@@ -181,8 +181,9 @@ class AdCloseAccessibilityService : AccessibilityService() {
                     val bounds = Rect().also(node::getBoundsInScreen)
                     if (!bounds.isEmpty) {
                         GP = Rect(bounds)
-                        val message = "Google Play найдена\\n" +
-                                "X: ${bounds.left}–${bounds.right}  Y: ${bounds.top}–${bounds.bottom}\\n" +
+                        gpNode = node // ← запоминаем ноду, чтобы её можно было нажать
+                        val message = "Google Play найдена\n" +
+                                "X: ${bounds.left}–${bounds.right}  Y: ${bounds.top}–${bounds.bottom}\n" +
                                 "Центр: ${bounds.centerX()}, ${bounds.centerY()}"
                         reportGpStatus(
                             message,
@@ -230,6 +231,8 @@ class AdCloseAccessibilityService : AccessibilityService() {
             )
         }
 
+        // Приоритет: сначала кнопка Google Play, затем явный close-контрол
+        gpNode?.let { return it to true }
         if (closeTarget != null) return closeTarget to false
         return if (aggressive && best != null) best to false else null
     }
@@ -314,7 +317,11 @@ class AdCloseAccessibilityService : AccessibilityService() {
         private const val KEY_ARMED_AT = "armed_at"
         private const val GP_STATUS_LOG_INTERVAL_MS = 3000L
 
-        private val GP_WORDS = listOf("google play", "install", "установить", "скачать", "get the app")
+        private val GP_WORDS = listOf(
+            "google play", "play store", "play", "google",
+            "install", "установить", "скачать", "get the app",
+            "get app", "open", "открыть", "в магазин"
+        )
         private val CLOSE_WORDS = listOf("close", "закрыть", "skip", "пропустить")
     }
 }
