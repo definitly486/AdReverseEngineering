@@ -55,13 +55,22 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val pipMode = mutableStateOf(false)
+    private val googlePipStatus = mutableStateOf("Google PiP: инициализация…")
+    private lateinit var googlePipController: GooglePipAdController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        googlePipController = GooglePipAdController(applicationContext) {
+            googlePipStatus.value = it
+        }
+        googlePipController.initialize()
         setContent {
             AdCoinApp(
                 isInPip = pipMode.value,
-                onEnterPip = ::enterAppPictureInPicture
+                onEnterPip = ::enterAppPictureInPicture,
+                googlePipStatus = googlePipStatus.value,
+                onShowGooglePip = { googlePipController.show(this) },
+                onHideGooglePip = googlePipController::hide
             )
         }
     }
@@ -104,6 +113,9 @@ class MainActivity : ComponentActivity() {
 private fun AdCoinApp(
     isInPip: Boolean,
     onEnterPip: () -> Unit,
+    googlePipStatus: String,
+    onShowGooglePip: () -> Unit,
+    onHideGooglePip: () -> Unit,
     vm: AdCoinViewModel = viewModel()
 ) {
     val state by vm.state.collectAsState()
@@ -174,7 +186,10 @@ private fun AdCoinApp(
                     vm = vm,
                     onWatchAd = { controller?.show() },
                     onEnterPip = onEnterPip,
-                    isActivityResumed = isActivityResumed.value
+                    isActivityResumed = isActivityResumed.value,
+                    googlePipStatus = googlePipStatus,
+                    onShowGooglePip = onShowGooglePip,
+                    onHideGooglePip = onHideGooglePip
                 )
             }
         }
@@ -246,7 +261,10 @@ private fun DashboardScreen(
     vm: AdCoinViewModel,
     onWatchAd: () -> Unit,
     onEnterPip: () -> Unit,
-    isActivityResumed: Boolean
+    isActivityResumed: Boolean,
+    googlePipStatus: String,
+    onShowGooglePip: () -> Unit,
+    onHideGooglePip: () -> Unit
 ) {
     val context = LocalContext.current
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -314,14 +332,26 @@ private fun DashboardScreen(
                 }
 
                 OutlinedButton(
-                    onClick = onEnterPip,
+                    onClick = onShowGooglePip,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Проверить PiP (свернуть приложение)")
+                    Text("Показать рекламу Google в PiP")
+                }
+                OutlinedButton(
+                    onClick = onHideGooglePip,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Закрыть окно Google PiP")
                 }
                 Text(
-                    "Эксперимент: это сворачивает интерфейс AdReverse. MAX открывает рекламу в собственном окне, " +
-                        "поэтому наличие PiP у приложения само по себе не переносит рекламное видео.",
+                    googlePipStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF9DDCB1)
+                )
+                Text(
+                    "Google PiP — плавающий рекламный баннер, не видеоролик. В этом режиме AdCoin не начисляет баллы. " +
+                        "Обычный rewarded-видеопросмотр MAX и onUserRewarded остаются без изменений. " +
+                        "Для реальной рекламы замените тестовые GMA_APP_ID и GMA_PIP_AD_UNIT_ID на свои данные Google Ad Manager.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.LightGray
                 )
