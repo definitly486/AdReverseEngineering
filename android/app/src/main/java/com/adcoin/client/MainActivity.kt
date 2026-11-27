@@ -1,4 +1,4 @@
-package com.adcoin.client // Убедитесь, что пакет совпадает с вашим (в логе был com.pavloffmedev.dcn)
+package com.adcoin.client
 
 import android.app.PictureInPictureParams
 import android.content.Intent
@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.applovin.sdk.AppLovinSdk
-import com.applovin.sdk.AppLovinSdkSettings
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -33,25 +32,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // 1. ГАРАНТИРОВАННАЯ ИНИЦИАЛИЗАЦИЯ APPLOVIN SDK
-        try {
-            val settings = AppLovinSdkSettings(this).apply {
-                isVerboseLogging = true // Включите, чтобы видеть ошибки AppLovin в logcat
-            }
-            AppLovinSdk.getInstance(this).settings = settings
-            AppLovinSdk.initializeSdk(this) {
-                Log.i("AdCoin", "✅ AppLovin SDK успешно инициализирован")
-            }
-        } catch (e: Exception) {
-            Log.e("AdCoin", "❌ Ошибка инициализации AppLovin SDK", e)
+        // 1. Простая и корректная инициализация AppLovin SDK (ключ берется из AndroidManifest.xml)
+        AppLovinSdk.getInstance(this).initializeSdk { configuration ->
+            Log.i("AdCoin", "✅ AppLovin SDK успешно инициализирован")
         }
 
         val closer = AdAutoCloser(application)
         
-        // 2. ЗАМЕНИТЕ "YOUR_REWARDED_AD_UNIT_ID" НА РЕАЛЬНЫЙ ID ИЗ ПАНЕЛИ APPLOVIN!
-        // Тестовый ID для rewarded video: "YOUR_REWARDED_AD_UNIT_ID" (замените на свой!)
-        val adUnitId = "YOUR_REWARDED_AD_UNIT_ID" 
+        // 2. Получаем Ad Unit ID из BuildConfig (он автоматически подставляется из GitHub Secrets)
+        val adUnitId = BuildConfig.APPLOVIN_REWARDED_AD_UNIT_ID
         
+        if (adUnitId.isBlank()) {
+            Log.e("AdCoin", "⚠️ APPLOVIN_REWARDED_AD_UNIT_ID не задан! Проверьте GitHub Secrets.")
+        }
+
         controller = MaxRewardedController(
             activity = this,
             adUnitId = adUnitId,
@@ -127,5 +121,180 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ... (Остальной код Compose функций: AdCoinApp, DashboardScreen, PipStatus, LoginScreen 
-// оставьте таким же, как в предыдущем правильном ответе) ...
+@Composable
+private fun AdCoinApp(
+    isInPip: Boolean,
+    pipVideoFile: File?,
+    onEnterPip: (File?) -> Unit,
+    onExitPip: () -> Unit,
+    controller: MaxRewardedController?,
+    isActivityResumed: Boolean,
+    vm: AdCoinViewModel
+) {
+    val state by vm.state.collectAsState()
+
+    if (isInPip) {
+        PipStatus(state.infiniteMode, state.videosCompleted, pipVideoFile)
+    } else {
+        if (state.tokenPresent) {
+            DashboardScreen(
+                state = state,
+                vm = vm,
+                controller = controller,
+                onEnterPip = onEnterPip,
+                onExitPip = onExitPip,
+                isActivityResumed = isActivityResumed
+            )
+        } else {
+            LoginScreen(vm = vm)
+        }
+    }
+
+    LaunchedEffect(state.autoShowNext, state.infiniteMode, isActivityResumed) {
+        if (state.autoShowNext && state.infiniteMode) {
+            if (!isActivityResumed) {
+                vm.setMessage("Награда подтверждена, следующий ролик готов. Вернитесь в приложение.")
+            } else {
+                vm.consumeAutoShowRequest()
+                val file = controller?.getLatestVideoFile()
+                onEnterPip(file)
+                val shown = controller?.show() == true
+                if (!shown) {
+                    vm.setMessage("Следующий ролик пока не готов. Ожидание MAX.")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardScreen(
+    state: ClientState,
+    vm: AdCoinViewModel,
+    controller: MaxRewardedController?,
+    onEnterPip: (File?) -> Unit,
+    onExitPip: () -> Unit,
+    isActivityResumed: Boolean
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Баланс: ${state.balance ?: "Загрузка..."}", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text("Просмотрено роликов: ${state.videosCompleted}", style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (!state.message.isNullOrEmpty()) {
+            Text(state.message ?: "", color = MaterialTheme.colorScheme.error)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        Button(
+            onClick = {
+                val file = controller?.getLatestVideoFile()
+                onEnterPip(file)
+                controller?.show()
+            },
+            enabled = controller?.isReady() == true && isActivityResumed && !state.checkingReward,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Смотреть рекламу")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = { 
+                if (state.infiniteMode) vm.stopInfiniteMode() else vm.startInfiniteMode() 
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (state.infiniteMode) "Остановить бесконечный просмотр" else "Запустить бесконечный просмотр")
+        }
+    }
+}
+
+@Composable
+private fun PipStatus(infiniteMode: Boolean, videosCompleted: Int, videoFile: File?) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(10.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (videoFile != null && videoFile.exists()) {
+            AndroidView(
+                factory = { ctx ->
+                    android.widget.VideoView(ctx).apply {
+                        setVideoPath(videoFile.absolutePath)
+                        setOnPreparedListener { mp ->
+                            mp.isLooping = false
+                            start()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Text("AdReverse · PiP", fontWeight = FontWeight.Bold, color = Color(0xFF8BDAA8))
+            Text(if (infiniteMode) "Просмотр активен: $videosCompleted" else "Приложение свернуто")
+            Text("Ожидание видеоролика...", color = Color.LightGray)
+        }
+    }
+}
+
+@Composable
+private fun LoginScreen(vm: AdCoinViewModel) {
+    val state by vm.state.collectAsState()
+    
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        OutlinedTextField(
+            value = state.email,
+            onValueChange = vm::setEmail,
+            label = { Text("Email") },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.loading && !state.codeSent
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        if (!state.codeSent) {
+            Button(
+                onClick = { vm.sendCode() },
+                enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Отправить код")
+            }
+        } else {
+            OutlinedTextField(
+                value = state.code,
+                onValueChange = vm::setCode,
+                label = { Text("Код из письма") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { vm.login() },
+                enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Войти")
+            }
+        }
+        
+        if (state.loading) {
+            Spacer(modifier = Modifier.height(8.dp))
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+        }
+        
+        if (!state.message.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(state.message ?: "", color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
