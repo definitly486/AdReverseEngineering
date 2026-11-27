@@ -152,42 +152,79 @@ private fun LoginScreen(state: ClientState, vm: AdCoinViewModel) {
     }
 }
 
+
 @Composable
-private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: () -> Unit) {
+private fun DashboardScreen(
+    state: ClientState,
+    vm: AdCoinViewModel,
+    onWatchAd: () -> Unit
+) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Кнопка "Выйти" осталась на своём оригинальном месте — справа от заголовка
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("AdCoin", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = vm::logout) { Text("Выйти") }
-        }
+        // Заголовок
+        Text(
+            "AdCoin",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold
+        )
+
+        // Баланс
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
                 Text("Баланс", color = Color.LightGray)
                 Text(
-                    state.balance?.let { String.format(Locale.US, "%.2f", it) } ?: "—",
+                    state.balance?.let {
+                        String.format(Locale.US, "%.2f", it)
+                    } ?: "—",
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Text("Значение получено из API AdCoin", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Значение получено из API AdCoin",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
+
+        // Ежедневная цель
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Ежедневная цель", style = MaterialTheme.typography.titleLarge)
+            Column(
+                Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Ежедневная цель",
+                    style = MaterialTheme.typography.titleLarge
+                )
                 Text(
                     if (state.dailyProgress != null && state.dailyTarget != null)
                         "${state.dailyProgress} / ${state.dailyTarget}"
-                    else "Данные недоступны"
+                    else
+                        "Данные недоступны"
                 )
-                state.dailyReward?.let { Text("Награда цели: $it") }
+                state.dailyReward?.let {
+                    Text("Награда цели: $it")
+                }
             }
         }
+
+        // Rewarded video
         Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Rewarded video", style = MaterialTheme.typography.titleLarge)
+            Column(
+                Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Rewarded video",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
                 Text(
                     "Следующий ролик запускается автоматически после штатного закрытия текущей рекламы " +
                         "и подтверждения награды сервером. Первый запуск требует нажатия; остановить цикл можно кнопкой «Стоп».",
@@ -202,20 +239,27 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     )
                 }
 
-                // The first impression is explicitly started by the user. Later impressions
-                // require MAX hidden + server-confirmed reward + a preloaded next ad.
                 if (!state.infiniteMode || state.videosCompleted == 0) {
                     Button(
                         onClick = onWatchAd,
-                        enabled = !state.checkingReward && !state.rewardInFlight && !state.userId.isNullOrBlank(),
+                        enabled = !state.checkingReward &&
+                            !state.rewardInFlight &&
+                            !state.userId.isNullOrBlank(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (state.infiniteMode) "Смотреть первое видео" else "Смотреть рекламу")
+                        Text(
+                            if (state.infiniteMode)
+                                "Смотреть первое видео"
+                            else
+                                "Смотреть рекламу"
+                        )
                     }
                 } else {
                     Text(
-                        if (state.checkingReward || state.rewardInFlight) "Проверяем начисление…"
-                        else "Автоматический цикл активен",
+                        if (state.checkingReward || state.rewardInFlight)
+                            "Проверяем начисление…"
+                        else
+                            "Автоматический цикл активен",
                         color = Color(0xFF8BDAA8)
                     )
                 }
@@ -227,18 +271,27 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                     if (!state.infiniteMode) {
                         OutlinedButton(
                             onClick = vm::startInfiniteMode,
-                            enabled = !state.userId.isNullOrBlank() && !state.checkingReward && !state.rewardInFlight,
+                            enabled = !state.userId.isNullOrBlank() &&
+                                !state.checkingReward &&
+                                !state.rewardInFlight,
                             modifier = Modifier.weight(1f)
-                        ) { Text("Бесконечный просмотр") }
+                        ) {
+                            Text("Бесконечный просмотр")
+                        }
                     } else {
                         OutlinedButton(
                             onClick = vm::stopInfiniteMode,
                             modifier = Modifier.weight(1f)
-                        ) { Text("Стоп") }
+                        ) {
+                            Text("Стоп")
+                        }
                     }
                 }
 
-                if (state.checkingReward) CircularProgressIndicator()
+                if (state.checkingReward) {
+                    CircularProgressIndicator()
+                }
+
                 if (state.userId.isNullOrBlank()) {
                     Text(
                         "Для MAX требуется внутренний ID пользователя из ответа AdCoin.",
@@ -247,10 +300,32 @@ private fun DashboardScreen(state: ClientState, vm: AdCoinViewModel, onWatchAd: 
                 }
             }
         }
+
+        // Обновление баланса
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = vm::refreshWallet, enabled = !state.loading) { Text("Обновить баланс") }
-            if (state.loading) CircularProgressIndicator()
+            Button(
+                onClick = vm::refreshWallet,
+                enabled = !state.loading
+            ) {
+                Text("Обновить баланс")
+            }
+
+            if (state.loading) {
+                CircularProgressIndicator()
+            }
         }
-        state.message?.let { Text(it, color = Color(0xFF9DDCB1)) }
+
+        // Сообщения
+        state.message?.let {
+            Text(it, color = Color(0xFF9DDCB1))
+        }
+
+        // Выход — в самом низу
+        OutlinedButton(
+            onClick = vm::logout,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Выйти")
+        }
     }
 }
