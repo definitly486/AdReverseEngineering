@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native Linux desktop client for AdCoin."""
 from __future__ import annotations
-import json, sys, uuid, logging, traceback
+import json, sys, uuid, logging, re
 from pathlib import Path
 from typing import Any
 import requests
@@ -59,7 +59,8 @@ def response_shape(value: Any, depth: int = 0) -> str:
 def safe_url(url: str, token: str = "") -> str:
     if token:
         url = url.replace(token, "<TOKEN>")
-    return url
+    # Authenticated endpoints put the token in the final /get/{token} path segment.
+    return re.sub(r"(/get/)[^/?]+", r"\1<TOKEN>", url)
 
 
 def build_session(access_token: str | None = None) -> requests.Session:
@@ -290,7 +291,7 @@ class BalanceWorker(QObject):
             logger.info("Step 4/4: requesting withdrawal methods")
             try:
                 results["withdrawalMethods"] = request_json(client, "GET",
-                    f"{api}/withdrawal/methods/get/{token}")
+                    f"{api}/withdrawal/methods/get/{requests.utils.quote(token, safe='')}")
             except Exception as exc:
                 logger.warning("withdrawal GET failed (%s); trying POST fallback", exc)
                 results["withdrawalMethods"] = request_json(client, "POST",
