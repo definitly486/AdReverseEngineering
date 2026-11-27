@@ -43,6 +43,19 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".StatsActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.pavloffmedev.dcn.stats"
+            android:resizeableActivity="true">
+            <layout
+                android:defaultWidth="160dp"
+                android:defaultHeight="104dp"
+                android:minWidth="120dp"
+                android:minHeight="80dp" />
+        </activity>
+
         <!-- MAX Activities remain resizable; windowing mode is controlled by Android. -->
         <activity
             android:name="com.applovin.adview.AppLovinFullscreenActivity"
