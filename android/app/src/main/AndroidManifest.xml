@@ -32,6 +32,11 @@
             android:exported="true"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true">
+            <layout
+                android:defaultWidth="220dp"
+                android:defaultHeight="320dp"
+                android:minWidth="180dp"
+                android:minHeight="240dp" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
