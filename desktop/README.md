@@ -3,9 +3,11 @@
 Native PySide6 desktop client. This is a separate Linux application; Android sources and the `app` branch remain unchanged. Run directly from source; no `.deb` package is produced.
 
 ## Features
-- Email-code login through `login/sendCode` and `login/validateCode`.
-- Session saved to `~/.config/adcoin/session.json` with restrictive file permissions.
+- Automatically loads the existing AdCoin session from `~/.config/adcoin/session.json`; no repeated email/code login is required while the session remains valid.
+- Resolves the internal AdCoin `userId` using `adcoin/getUserData` and displays it in the account window.
+- Keeps the email-code login available only as a fallback if no session exists or the saved session expires.
 - Refreshes cash, account statistics and withdrawal balance through the AdCoin API.
+- The saved access token is never displayed in the interface.
 - Balance requests run outside the GUI thread.
 - Built-in video player with local files and direct HTTP(S) video URLs.
 - Playlist, automatic next video, pause, seek and volume controls.
