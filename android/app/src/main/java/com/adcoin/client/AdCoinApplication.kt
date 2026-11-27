@@ -88,7 +88,7 @@ internal object ScreenPowerController {
     fun applyToActivity(activity: Activity, context: Application) {
         val mode = context.getSharedPreferences(
             BackgroundViewingService.PREFS_NAME,
-            MODE_PRIVATE
+            android.content.Context.MODE_PRIVATE
         ).getString(
             BackgroundViewingService.KEY_SCREEN_MODE,
             BackgroundViewingService.SCREEN_MODE_DIM
