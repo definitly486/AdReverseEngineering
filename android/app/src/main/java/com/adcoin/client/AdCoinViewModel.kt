@@ -239,8 +239,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             Log.i("AdCoin.Reward", "Credit monitor started; lastCreditAt=$lastCreditAt deadline=$deadline")
 
             var credited = false
-            var lastRefreshSucceeded = false
-            var latestBalance = balanceBeforeCurrentAd
+            var baseline = balanceBeforeCurrentAd ?: _state.value.balance
 
             while (System.currentTimeMillis() < deadline && !credited) {
                 val result = runCatching { api.wallet() }.getOrNull()
@@ -249,7 +248,11 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                     store.updateUserId(result.userId)
                     persistServerStats(result)
                     val next = result.balance
-                    if (next != null) latestBalance = next
+                    if (baseline == null && next != null) {
+                        baseline = next
+                        balanceBeforeCurrentAd = next
+                        Log.i("AdCoin.Reward", "Initial balance baseline captured: $next")
+                    }
                     _state.value = _state.value.copy(
                         balance = next ?: _state.value.balance,
                         dailyProgress = result.dailyProgress ?: _state.value.dailyProgress,
@@ -257,7 +260,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                         dailyReward = result.dailyReward ?: _state.value.dailyReward,
                         userId = result.userId ?: store.userId()
                     )
-                    val baseline = balanceBeforeCurrentAd
                     if (baseline != null && next != null && next > baseline + 0.0001) {
                         credited = true
                         val creditedAt = System.currentTimeMillis()
