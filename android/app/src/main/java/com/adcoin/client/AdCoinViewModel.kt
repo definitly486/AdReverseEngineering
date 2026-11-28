@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     // Snapshot taken when MAX actually starts displaying an ad. A reward is
     // considered confirmed only when the AdCoin API reports a higher balance.
     private var balanceBeforeCurrentAd: Double? = null
+    private var adDisplayWatchdog: Job? = null
+    private var rewardCheckJob: Job? = null
 
     private val _state = MutableStateFlow(
         ClientState(
@@ -222,15 +225,47 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onMaxAdDisplayed() {
         balanceBeforeCurrentAd = _state.value.balance
+        adDisplayWatchdog?.cancel()
         _state.value = _state.value.copy(
             adReady = false, adHidden = false,
             rewardVerifiedForAd = false, autoShowNext = false
         )
+
+        // This watchdog starts when MAX confirms that the ad is on screen,
+        // not when the reward callback arrives. It therefore also catches a
+        // frozen video that never calls onUserRewarded/onAdHidden.
+        if (_state.value.infiniteMode) {
+            adDisplayWatchdog = viewModelScope.launch {
+                Log.i("AdCoin.Reward", "Ad display watchdog started (180 seconds)")
+                delay(180_000)
+                val current = _state.value
+                if (current.infiniteMode && !current.adHidden) {
+                    Log.e("AdCoin.Reward", "Ad is still displayed after 180 seconds; forcing Freeform restart")
+                    rewardCheckJob?.cancel()
+                    requestRewardTimeoutRestart(
+                        "Реклама зависла: MAX не закрыл ролик за 3 минуты. Перезапускаем приложение в Freeform."
+                    )
+                }
+            }
+        }
     }
 
     fun onMaxAdHidden() {
+        adDisplayWatchdog?.cancel()
+        adDisplayWatchdog = null
         _state.value = _state.value.copy(adHidden = true)
         maybeScheduleNextAd()
+    }
+
+    private fun requestRewardTimeoutRestart(reason: String) {
+        if (!_state.value.infiniteMode) return
+        backgroundPrefs.edit().putBoolean(KEY_AUTO_START_AFTER_RESTART, true).apply()
+        _state.value = _state.value.copy(
+            checkingReward = false,
+            rewardInFlight = false,
+            restartForRewardTimeout = true,
+            message = reason
+        )
     }
 
     private fun maybeScheduleNextAd() {
@@ -265,7 +300,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         val baseline = balanceBeforeCurrentAd ?: _state.value.balance
         Log.i("AdCoin.Reward", "MAX reward callback: label=$rewardLabel amount=$rewardAmount baseline=$baseline")
 
-        viewModelScope.launch {
+        rewardCheckJob?.cancel()
+        rewardCheckJob = viewModelScope.launch {
             _state.value = _state.value.copy(
                 rewardInFlight = true,
                 checkingReward = true,
@@ -310,7 +346,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             val restartForTimeout = wasInfinite && !credited && _state.value.infiniteMode
             if (restartForTimeout) {
                 // Persist the next-ad request before the process is restarted.
-                backgroundPrefs.edit().putBoolean(KEY_AUTO_START_AFTER_RESTART, true).apply()
                 Log.w("AdCoin.Reward", "No AdCoin reward confirmation after 3 minutes; requesting Freeform restart")
             }
             backgroundPrefs.edit().putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, completed).apply()
@@ -335,6 +370,9 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                         "MAX сообщил о награде, но AdCoin пока не отразил её в балансе. Баланс можно обновить позже."
                 }
             )
+            if (restartForTimeout) {
+                backgroundPrefs.edit().putBoolean(KEY_AUTO_START_AFTER_RESTART, true).apply()
+            }
             maybeScheduleNextAd()
         }
     }
