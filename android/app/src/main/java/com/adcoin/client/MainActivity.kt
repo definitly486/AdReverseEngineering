@@ -496,6 +496,7 @@ private fun AdCoinApp(
     LaunchedEffect(
         state.autoShowNext,
         state.infiniteMode,
+        state.adReady,
         isActivityResumed,
         controller
     ) {
