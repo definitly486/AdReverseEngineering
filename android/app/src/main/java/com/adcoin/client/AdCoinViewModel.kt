@@ -31,7 +31,8 @@ data class ClientState(
     val adReady: Boolean = false,
     val adHidden: Boolean = false,
     val rewardVerifiedForAd: Boolean = false,
-    val autoShowNext: Boolean = false
+    val autoShowNext: Boolean = false,
+    val restartForRewardTimeout: Boolean = false
 )
 
 class AdCoinViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,6 +41,7 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     private val backgroundPrefs = application.getSharedPreferences(
         BackgroundViewingService.PREFS_NAME, Application.MODE_PRIVATE
     )
+    private val restartAfterTimeout = backgroundPrefs.getBoolean(KEY_AUTO_START_AFTER_RESTART, false)
     private val serverStatsPrefs = application.getSharedPreferences(
         "adreverse_server_stats", Application.MODE_PRIVATE
     )
@@ -64,12 +66,19 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             screenMode = backgroundPrefs.getString(
                 BackgroundViewingService.KEY_SCREEN_MODE,
                 BackgroundViewingService.SCREEN_MODE_DIM
-            ) ?: BackgroundViewingService.SCREEN_MODE_DIM
+            ) ?: BackgroundViewingService.SCREEN_MODE_DIM,
+            autoShowNext = restartAfterTimeout && backgroundPrefs.getBoolean(
+                BackgroundViewingService.KEY_INFINITE_MODE, false
+            )
         )
     )
     val state: StateFlow<ClientState> = _state.asStateFlow()
 
     init {
+        if (restartAfterTimeout) {
+            backgroundPrefs.edit().remove(KEY_AUTO_START_AFTER_RESTART).apply()
+            Log.i("AdCoin.Reward", "Restored automatic ad start after reward-timeout restart")
+        }
         if (_state.value.infiniteMode && _state.value.tokenPresent) {
             // Restore only the user-visible session. MAX ad playback itself is Activity-bound.
             BackgroundViewingService.start(application)
@@ -241,6 +250,10 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
         _state.value = _state.value.copy(autoShowNext = false)
     }
 
+    fun consumeRewardTimeoutRestart() {
+        _state.value = _state.value.copy(restartForRewardTimeout = false)
+    }
+
     fun onRewarded(rewardLabel: String, rewardAmount: Int) {
         // MAX may emit the callback only once per impression; ignore duplicate
         // callbacks while the corresponding AdCoin balance check is running.
@@ -264,7 +277,9 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
             // Query immediately, then allow the AdCoin backend time to process
             // its MAX server-side reward callback. Never manufacture a balance.
-            for (attempt in 0 until 12) {
+            // Keep checking for three minutes after MAX's reward callback.
+            // The first request is immediate; the remaining 36 are spaced by 5 seconds.
+            for (attempt in 0 until 37) {
                 if (attempt > 0) delay(5_000)
                 val result = runCatching { api.wallet() }.getOrNull()
                 if (result != null) {
@@ -286,18 +301,25 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                         break
                     }
                 } else {
-                    Log.w("AdCoin.Reward", "AdCoin wallet refresh failed (attempt ${attempt + 1}/12)")
+                    Log.w("AdCoin.Reward", "AdCoin wallet refresh failed (attempt ${attempt + 1}/37)")
                 }
             }
 
             val wasInfinite = _state.value.infiniteMode
             val completed = _state.value.videosCompleted + if (credited) 1 else 0
+            val restartForTimeout = wasInfinite && !credited && _state.value.infiniteMode
+            if (restartForTimeout) {
+                // Persist the next-ad request before the process is restarted.
+                backgroundPrefs.edit().putBoolean(KEY_AUTO_START_AFTER_RESTART, true).apply()
+                Log.w("AdCoin.Reward", "No AdCoin reward confirmation after 3 minutes; requesting Freeform restart")
+            }
             backgroundPrefs.edit().putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, completed).apply()
             _state.value = _state.value.copy(
                 checkingReward = false,
                 rewardInFlight = false,
                 videosCompleted = completed,
                 rewardVerifiedForAd = credited,
+                restartForRewardTimeout = restartForTimeout,
                 message = when {
                     credited && wasInfinite ->
                         "AdCoin подтвердил награду (#$completed). Ожидаем закрытия рекламы и готовности следующего ролика…"
@@ -308,13 +330,17 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                     !lastRefreshSucceeded ->
                         "MAX сообщил о награде, но API AdCoin недоступен. Не удалось проверить начисление."
                     wasInfinite ->
-                        "MAX сообщил о награде, но баланс AdCoin не изменился. Следующий показ остановлен до подтверждения сервера."
+                        "За 3 минуты AdCoin не подтвердил награду. Перезапускаем приложение в Freeform и повторно запускаем рекламу."
                     else ->
                         "MAX сообщил о награде, но AdCoin пока не отразил её в балансе. Баланс можно обновить позже."
                 }
             )
             maybeScheduleNextAd()
         }
+    }
+
+    private companion object {
+        const val KEY_AUTO_START_AFTER_RESTART = "auto_start_after_reward_timeout_restart"
     }
 
     fun logout() {
