@@ -377,7 +377,7 @@ class AdCloseAccessibilityService : AccessibilityService() {
         fun requestBackFromAd(): Boolean {
             val service = instance ?: return false
             service.mainHandler.post {
-                service.getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
+                service.getSharedPreferences(AdAutoCloser.PREFS, android.content.Context.MODE_PRIVATE)
                     .edit()
                     .putBoolean(AdAutoCloser.KEY_ACTIVE, false)
                     .putString(AdAutoCloser.KEY_LAST_RESULT, "timeout: sending BACK to close stuck ad")
