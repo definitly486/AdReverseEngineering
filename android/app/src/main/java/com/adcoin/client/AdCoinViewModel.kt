@@ -56,7 +56,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     // Snapshot taken when MAX actually starts displaying an ad. A reward is
     // considered confirmed only when the AdCoin API reports a higher balance.
     private var balanceBeforeCurrentAd: Double? = null
-    private var adDisplayWatchdog: Job? = null
     private var rewardCheckJob: Job? = null
 
     private val _state = MutableStateFlow(
@@ -220,31 +219,15 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onMaxAdDisplayed() {
         balanceBeforeCurrentAd = _state.value.balance
-        adDisplayWatchdog?.cancel()
+        // The three-minute deadline is tied to server-side reward confirmation,
+        // not total ad playback time. Long legitimate videos must not be closed.
         _state.value = _state.value.copy(
             adReady = false, adHidden = false,
             rewardVerifiedForAd = false, autoShowNext = false
         )
-
-        // Start for every displayed rewarded ad, including manual playback.
-        // This catches a frozen video even if MAX never sends reward/hidden callbacks.
-        adDisplayWatchdog = viewModelScope.launch {
-            Log.i("AdCoin.Reward", "Ad display watchdog started (180 seconds)")
-            delay(180_000)
-            val current = _state.value
-            if (!current.adHidden) {
-                Log.e("AdCoin.Reward", "Ad is still displayed after 180 seconds; closing ad and returning to main screen")
-                rewardCheckJob?.cancel()
-                requestAdTimeoutExit(
-                    "Реклама зависла на 3 минуты. Закрываем ролик и возвращаемся в главное меню."
-                )
-            }
-        }
     }
 
     fun onMaxAdHidden() {
-        adDisplayWatchdog?.cancel()
-        adDisplayWatchdog = null
         _state.value = _state.value.copy(adHidden = true)
         maybeScheduleNextAd()
     }
@@ -340,7 +323,9 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
 
             val wasInfinite = _state.value.infiniteMode
             val completed = _state.value.videosCompleted + if (credited) 1 else 0
-            val exitAfterTimeout = wasInfinite && !credited && _state.value.infiniteMode
+            // A missing server credit ends this ad session in BOTH manual and
+            // infinite modes. Do not leave an unverified rewarded ad running.
+            val exitAfterTimeout = !credited
             if (exitAfterTimeout) {
                 Log.w("AdCoin.Reward", "AdCoin did not confirm reward within 3 minutes; closing ad and returning to main screen")
                 backgroundPrefs.edit()
@@ -367,10 +352,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
                         "MAX сообщил о награде, баланс обновлён: ${if (lastRefreshSucceeded) "сервер не вернул исходный баланс для сравнения" else "сервер недоступен"}. Начисление не подтверждено."
                     !lastRefreshSucceeded ->
                         "MAX сообщил о награде, но API AdCoin недоступен. Не удалось проверить начисление."
-                    wasInfinite ->
-                        "За 3 минуты AdCoin не подтвердил награду. Завершаем просмотр и возвращаемся в главное меню."
                     else ->
-                        "MAX сообщил о награде, но AdCoin пока не отразил её в балансе. Баланс можно обновить позже."
+                        "За 3 минуты сервер AdCoin не подтвердил начисление. Закрываем ролик и возвращаемся в главное меню."
                 }
             )
             if (!exitAfterTimeout) maybeScheduleNextAd()
