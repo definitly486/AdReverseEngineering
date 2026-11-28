@@ -241,8 +241,15 @@ class MainActivity : ComponentActivity() {
      * The app process is deliberately NOT force-stopped.
      */
     private fun requestAdTimeoutExit() {
+        // If MAX already hid the ad while the server check was running, do not
+        // send BACK into the main screen. Just bring MainActivity to the front.
+        val adWasShowing = controllerState.value?.isAdShowing() == true
         controllerState.value?.stopWatchingForClose()
-        val accessibilityBackRequested = AdCloseAccessibilityService.requestBackFromAd()
+        val accessibilityBackRequested = if (adWasShowing) {
+            AdCloseAccessibilityService.requestBackFromAd()
+        } else {
+            false
+        }
 
         if (Shizuku.pingBinder() &&
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
@@ -251,10 +258,10 @@ class MainActivity : ComponentActivity() {
                 try {
                     // The accessibility service may already have sent BACK.
                     // Otherwise send it from the Shizuku shell.
-                    val closeCommand = if (accessibilityBackRequested) {
-                        "sleep 1"
-                    } else {
-                        "input keyevent 4; sleep 1"
+                    val closeCommand = when {
+                        !adWasShowing -> "sleep 1"
+                        accessibilityBackRequested -> "sleep 1"
+                        else -> "input keyevent 4; sleep 1"
                     }
                     val command = """
                         $closeCommand
