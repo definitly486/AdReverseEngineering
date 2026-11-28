@@ -345,7 +345,8 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             val completed = _state.value.videosCompleted + if (credited) 1 else 0
             val restartForTimeout = wasInfinite && !credited && _state.value.infiniteMode
             if (restartForTimeout) {
-                // Persist the next-ad request before the process is restarted.
+                // Persist the next-ad request before notifying the Activity to restart.
+                backgroundPrefs.edit().putBoolean(KEY_AUTO_START_AFTER_RESTART, true).apply()
                 Log.w("AdCoin.Reward", "No AdCoin reward confirmation after 3 minutes; requesting Freeform restart")
             }
             backgroundPrefs.edit().putInt(BackgroundViewingService.KEY_VIDEOS_COMPLETED, completed).apply()
