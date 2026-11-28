@@ -34,6 +34,7 @@ import java.io.File
 private const val TAG = "AdCoin"
 private const val SHIZUKU_REQUEST_CODE = 4107
 private const val SHIZUKU_STATS_REQUEST_CODE = 4108
+private const val SHIZUKU_RESTART_REQUEST_CODE = 4109
 
 class MainActivity : ComponentActivity() {
 
@@ -51,11 +52,15 @@ class MainActivity : ComponentActivity() {
     private val shizukuPermissionListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
             if (requestCode == SHIZUKU_REQUEST_CODE ||
-                requestCode == SHIZUKU_STATS_REQUEST_CODE
+                requestCode == SHIZUKU_STATS_REQUEST_CODE ||
+                requestCode == SHIZUKU_RESTART_REQUEST_CODE
             ) {
                 if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                    if (requestCode == SHIZUKU_REQUEST_CODE) launchInFreeform()
-                    else launchStatsInFreeform()
+                    when (requestCode) {
+                        SHIZUKU_REQUEST_CODE -> launchInFreeform()
+                        SHIZUKU_STATS_REQUEST_CODE -> launchStatsInFreeform()
+                        SHIZUKU_RESTART_REQUEST_CODE -> restartInFreeform()
+                    }
                 } else {
                     showToast("Разрешение Shizuku не предоставлено")
                 }
@@ -85,6 +90,7 @@ class MainActivity : ComponentActivity() {
                 onOpenAccessibilitySettings = ::openAccessibilitySettings,
                 onDismissAccessibilityWarning = { showAccessibilityWarning.value = false },
                 onLaunchFreeform = ::requestFreeformLaunch,
+                onRestartInFreeform = ::requestRewardTimeoutRestart,
                 onOpenStatsWindow = ::requestStatsWindow,
                 vm = vm
             )
@@ -233,6 +239,52 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestRewardTimeoutRestart() {
+        if (!Shizuku.pingBinder()) {
+            showToast("Награда не подтверждена за 3 минуты, но Shizuku не запущен — автоматический перезапуск Freeform невозможен.")
+            return
+        }
+
+        try {
+            when (Shizuku.checkSelfPermission()) {
+                PackageManager.PERMISSION_GRANTED -> restartInFreeform()
+                else -> Shizuku.requestPermission(SHIZUKU_RESTART_REQUEST_CODE)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось запросить Shizuku для перезапуска", e)
+            showToast("Не удалось перезапустить Freeform: ${e.message ?: "ошибка Shizuku"}")
+        }
+    }
+
+    /** Run the restart sequence in the Shizuku shell; it survives force-stop. */
+    private fun restartInFreeform() {
+        Thread {
+            try {
+                if (!Shizuku.pingBinder() ||
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
+                ) {
+                    runOnUiThread { showToast("Shizuku отключён или разрешение отозвано; перезапуск отменён.") }
+                    return@Thread
+                }
+
+                val command = listOf(
+                    "am force-stop com.pavloffmedev.dcn",
+                    "sleep 1",
+                    "am start --windowingMode 5 -f 0x10000000 -n com.pavloffmedev.dcn/com.adcoin.client.MainActivity"
+                ).joinToString("; ")
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                val exitCode = process.waitFor()
+                Log.i(TAG, "Reward-timeout Freeform restart exit=$exitCode output=$output")
+                if (exitCode != 0) {
+                    runOnUiThread { showToast("Не удалось перезапустить AdReverse: $output") }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Reward-timeout Freeform restart failed", e)
+                runOnUiThread { showToast("Ошибка перезапуска: ${e.message ?: "неизвестная ошибка"}") }
+            }
+        }.start()
+    }
     private fun requestStatsWindow() {
         if (!Shizuku.pingBinder()) {
             showToast("Для отдельного окна статистики нужен запущенный Shizuku")
@@ -380,6 +432,7 @@ private fun AdCoinApp(
     onOpenAccessibilitySettings: () -> Unit,
     onDismissAccessibilityWarning: () -> Unit,
     onLaunchFreeform: () -> Unit,
+    onRestartInFreeform: () -> Unit,
     onOpenStatsWindow: () -> Unit,
     vm: AdCoinViewModel
 ) {
@@ -430,6 +483,13 @@ private fun AdCoinApp(
             )
         } else {
             LoginScreen(vm = vm)
+        }
+    }
+
+    LaunchedEffect(state.restartForRewardTimeout) {
+        if (state.restartForRewardTimeout) {
+            vm.consumeRewardTimeoutRestart()
+            onRestartInFreeform()
         }
     }
 
