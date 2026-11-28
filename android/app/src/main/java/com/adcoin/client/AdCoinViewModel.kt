@@ -226,21 +226,18 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             rewardVerifiedForAd = false, autoShowNext = false
         )
 
-        // This watchdog starts when MAX confirms that the ad is on screen,
-        // not when the reward callback arrives. It therefore also catches a
-        // frozen video that never calls onUserRewarded/onAdHidden.
-        if (_state.value.infiniteMode) {
-            adDisplayWatchdog = viewModelScope.launch {
-                Log.i("AdCoin.Reward", "Ad display watchdog started (180 seconds)")
-                delay(180_000)
-                val current = _state.value
-                if (current.infiniteMode && !current.adHidden) {
-                    Log.e("AdCoin.Reward", "Ad is still displayed after 180 seconds; closing ad and returning to main screen")
-                    rewardCheckJob?.cancel()
-                    requestAdTimeoutExit(
-                        "Реклама зависла на 3 минуты. Закрываем ролик и возвращаемся в главное меню."
-                    )
-                }
+        // Start for every displayed rewarded ad, including manual playback.
+        // This catches a frozen video even if MAX never sends reward/hidden callbacks.
+        adDisplayWatchdog = viewModelScope.launch {
+            Log.i("AdCoin.Reward", "Ad display watchdog started (180 seconds)")
+            delay(180_000)
+            val current = _state.value
+            if (!current.adHidden) {
+                Log.e("AdCoin.Reward", "Ad is still displayed after 180 seconds; closing ad and returning to main screen")
+                rewardCheckJob?.cancel()
+                requestAdTimeoutExit(
+                    "Реклама зависла на 3 минуты. Закрываем ролик и возвращаемся в главное меню."
+                )
             }
         }
     }
@@ -253,7 +250,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun requestAdTimeoutExit(reason: String) {
-        if (!_state.value.infiniteMode) return
         backgroundPrefs.edit()
             .putBoolean(BackgroundViewingService.KEY_INFINITE_MODE, false)
             .remove("auto_start_after_reward_timeout_restart")
