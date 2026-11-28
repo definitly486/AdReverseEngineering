@@ -26,7 +26,13 @@ class AdCloseAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         Log.i(TAG, "accessibility service connected")
+    }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -361,6 +367,27 @@ class AdCloseAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     companion object {
+        @Volatile private var instance: AdCloseAccessibilityService? = null
+
+        /**
+         * Stop ad-control automation and send BACK to the foreground MAX Activity.
+         * MainActivity is brought back to the foreground separately by the caller.
+         */
+        @JvmStatic
+        fun requestBackFromAd(): Boolean {
+            val service = instance ?: return false
+            service.mainHandler.post {
+                service.getSharedPreferences(AdAutoCloser.PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(AdAutoCloser.KEY_ACTIVE, false)
+                    .putString(AdAutoCloser.KEY_LAST_RESULT, "timeout: sending BACK to close stuck ad")
+                    .apply()
+                val sent = service.performGlobalAction(GLOBAL_ACTION_BACK)
+                Log.i(TAG, "timeout BACK action sent=$sent")
+            }
+            return true
+        }
+
         private const val TAG = "AdCoin.AccessClose"
         private const val CLICK_COOLDOWN_MS = 800L
         private const val TREE_DUMP_INTERVAL_MS = 2000L
