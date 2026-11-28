@@ -36,7 +36,7 @@ class MaxRewardedController(
     }
 
     fun isReady(): Boolean = rewardedAd.isReady
-    fun isShowing(): Boolean = isShowing.get()
+    fun isAdShowing(): Boolean = isShowing.get()
 
     /** Disarm accessibility auto-close when the app is explicitly exiting a stuck ad. */
     fun stopWatchingForClose() {
