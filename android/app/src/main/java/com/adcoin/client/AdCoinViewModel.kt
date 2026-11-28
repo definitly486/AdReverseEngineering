@@ -244,7 +244,6 @@ class AdCoinViewModel(application: Application) : AndroidViewModel(application) 
             while (System.currentTimeMillis() < deadline && !credited) {
                 val result = runCatching { api.wallet() }.getOrNull()
                 if (result != null) {
-                    lastRefreshSucceeded = true
                     store.updateUserId(result.userId)
                     persistServerStats(result)
                     val next = result.balance
