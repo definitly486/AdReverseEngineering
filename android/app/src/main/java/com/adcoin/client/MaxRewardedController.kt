@@ -37,6 +37,12 @@ class MaxRewardedController(
 
     fun isReady(): Boolean = rewardedAd.isReady
 
+    /** Disarm accessibility auto-close when the app is explicitly exiting a stuck ad. */
+    fun stopWatchingForClose() {
+        isShowing.set(false)
+        autoCloser?.stop()
+    }
+
     /**
      * Ищет доступные приложению локальные видеофайлы.
      *
